@@ -22,3 +22,5 @@ EXTRA_DIST = \
 	COPYING
 #\
 #	INSTALL
+
+-include $(top_srcdir)/git.mk
