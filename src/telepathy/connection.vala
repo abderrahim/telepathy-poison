@@ -97,3 +97,41 @@ public interface Telepathy.ConnectionContactList : Object, Connection {
 	public abstract uint contact_list_state { get; protected set; }
 }
 
+public struct Telepathy.SimplePresence {
+	public SimplePresence (uint type, string status, string? status_message) {
+		this.type = type;
+		this.status = status;
+		this.status_message = status_message ?? "";
+	}
+	uint type; // PresenceType
+	string status;
+	string status_message;
+}
+public struct Telepathy.SimpleStatusSpec {
+	public SimpleStatusSpec (uint type, bool may_set_on_self, bool can_have_message) {
+		this.type = type;
+		this.may_set_on_self = may_set_on_self;
+		this.can_have_message = can_have_message;
+	}
+	uint type; // PresenceType
+	bool may_set_on_self;
+	bool can_have_message;
+}
+
+[DBus (name = "org.freedesktop.Telepathy.Connection.Interface.SimplePresence")]
+public interface Telepathy.ConnectionSimplePresence : Object, Connection {
+	public abstract void set_presence (string status, string status_message) throws IOError;
+	public abstract HashTable<uint, SimplePresence?> get_presences (uint[] contacts) throws IOError;
+
+	public signal void presences_changed (HashTable<uint, SimplePresence?> presence);
+
+	public abstract HashTable<string, SimpleStatusSpec?> statuses { owned get; }
+	public abstract uint maximum_status_message_length { get; }
+
+	public const string CONTACT_PRESENCE = "org.freedesktop.Telepathy.Connection.Interface.SimplePresence/presence";
+
+	public enum PresenceType {
+		UNSET, OFFLINE, AVAILABLE, AWAY, EXTENDED_AWAY, HIDDEN, BUSY, UNKNOWN, ERROR
+	}
+
+}

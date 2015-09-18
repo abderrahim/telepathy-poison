@@ -1,6 +1,13 @@
 [CCode (cname = "Tox", free_function = "tox_kill", cheader_filename="tox/tox.h")]
 [Compact]
 public class Tox {
+	public const int ADDRESS_SIZE;
+	public const int PUBLIC_KEY_SIZE;
+	public const int SECRET_KEY_SIZE;
+	public const int MAX_STATUS_MESSAGE_LENGTH;
+
+	[CCode (cname = "TOX_USER_STATUS")]
+	public enum UserStatus { NONE, AWAY, BUSY }
 
 	[CCode (cname = "TOX_PROXY_TYPE", cprefix = "TOX_PROXY_TYPE_")]
 	public enum ProxyType {NONE, HTTP, SOCKS5}
@@ -49,7 +56,7 @@ public class Tox {
 
 	[CCode (cname = "TOX_CONNECTION")]
 	public enum Connection { NONE, TCP, UDP }
-	Connection self_get_connection_status ();
+	public Connection self_get_connection_status ();
 	[CCode (cname = "tox_self_connection_status_cb")]
 	public delegate void SelfConnectionStatusCb (Tox tox, Connection connection_status);
 	public void callback_self_connection_status (SelfConnectionStatusCb callback);
@@ -58,9 +65,6 @@ public class Tox {
 	public void iterate ();
 
 	// Internal client information
-	public const int ADDRESS_SIZE;
-	public const int PUBLIC_KEY_SIZE;
-	public const int SECRET_KEY_SIZE;
 	[CCode (cname = "tox_self_get_address")]
 	void self_get_address_raw ([CCode (array_length = false)] uint8[] address);
 	[CCode (cname = "_vala_tox_self_get_address")]
@@ -111,18 +115,18 @@ public class Tox {
 	size_t self_get_status_message_size();
 	[CCode (cname = "tox_self_get_status_message")]
 	void self_get_status_message_raw([CCode (array_length = false)] uint8[] status_message);
-	
+
 	[CCode (cname = "_vala_tox_self_get_status_message")]
 	public uint8[] self_get_status_message () {
 		var result = new uint8[self_get_status_message_size()];
 		self_get_status_message_raw(result);
 		return result;
 	}
-	
 
 
-	public void self_set_status(int /*TOX_USER_STATUS*/ status);
-	public int /*TOX_USER_STATUS*/ self_get_status();
+
+	public void self_set_status(UserStatus status);
+	public UserStatus self_get_status();
 
 	// Friend list management
 	public uint32 friend_add([CCode (array_length = false)] uint8[] address, uint8[] message, out int /*TOX_ERR_FRIEND_ADD **/ error);
@@ -175,20 +179,35 @@ public class Tox {
 		friend_get_name_raw(friend_number, result, out error);
 		return result;
 	}
-	
+
 
 	[CCode (cname = "tox_friend_name_cb")]
 	public delegate void FriendNameCb (Tox tox, uint32 friend_number, uint8[] name);
 	public void callback_friend_name(FriendNameCb callback);
 
 	public size_t friend_get_status_message_size(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
-	public bool friend_get_status_message(uint32 friend_number, [CCode (array_length = false)] uint8[] status_message, out int /*TOX_ERR_FRIEND_QUERY **/error);
+	[CCode (cname = "tox_friend_get_status_message")]
+	bool friend_get_status_message_raw(uint32 friend_number, [CCode (array_length = false)] uint8[] status_message, out int /*TOX_ERR_FRIEND_QUERY **/error);
+
+	[CCode (cname = "_vala_tox_friend_get_status_message")]
+	public uint8[] friend_get_status_message (uint32 friend_number, out int error) {
+		int err;
+		var size = friend_get_status_message_size(friend_number, out err);
+		if (err != 0) {
+			error = err;
+			return null;
+		}
+		var result = new uint8[size];
+		friend_get_status_message_raw(friend_number, result, out error);
+		return result;
+	}
+
 	public delegate void FriendStatusMessageCb(Tox tox, uint32 friend_number, uint8[] message);
 	public void callback_friend_status_message(FriendStatusMessageCb callback);
 
-	public int /*TOX_USER_STATUS*/ friend_get_status(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
+	public UserStatus friend_get_status(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
 	[CCode (cname = "tox_friend_status_cb")]
-	public delegate void FriendStatusCb(Tox tox, uint32 friend_number, int /*TOX_USER_STATUS*/ status);
+	public delegate void FriendStatusCb(Tox tox, uint32 friend_number, UserStatus status);
 	public void callback_friend_status(FriendStatusCb callback);
 
 	public Connection friend_get_connection_status(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);

@@ -9,7 +9,7 @@ const string MY_NAME = "ImoutoBot";
 const string MY_STATUS_MESSAGE = "This is a message!";
 
 
-public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionContactList {
+public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
 	string profile;
 	string profile_filename;
 	bool keep_connecting = true;
@@ -48,7 +48,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 					conn.register_object<Telepathy.Connection> (objpath, this),
 					conn.register_object<Telepathy.ConnectionRequests> (objpath, this),
 					conn.register_object<Telepathy.ConnectionContacts> (objpath, this),
-					conn.register_object<Telepathy.ConnectionContactList> (objpath, this)
+					conn.register_object<Telepathy.ConnectionContactList> (objpath, this),
+					conn.register_object<Telepathy.ConnectionSimplePresence> (objpath, this),
 				};
 				if (callback != null) {
 					callback();
@@ -78,15 +79,13 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		tox.callback_friend_request(friend_request_callback);
 		tox.callback_friend_message(friend_message_callback);
 		tox.callback_self_connection_status(self_connection_status_callback);
+
+		tox.callback_friend_status(friend_status_callback);
+		tox.callback_friend_status_message(friend_status_message_callback);
+		tox.callback_friend_connection_status(friend_connection_status_callback);
 		/* Define or load some user details for the sake of it */
 		// Sets the username
 		//tox.self_set_name(MY_NAME.data, null);
-		// Sets the status message
-		//tox.self_set_status_message(MY_STATUS_MESSAGE.data, null);
-
-		/* Set the user status to MY_TOX.USER_STATUS_NONE. Other possible values:
-		   MY_TOX.USER_STATUS_AWAY and MY_TOX.USER_STATUS_BUSY */
-		tox.self_set_status(0/*USER_STATUS_NONE*/);
 
 		var address = tox.self_get_address();
 
@@ -168,7 +167,9 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		owned get {
 			return {"org.freedesktop.Telepathy.Connection.Interface.Contacts",
 					"org.freedesktop.Telepathy.Connection.Interface.Requests",
-					"org.freedesktop.Telepathy.Connection.Interface.ContactList"};
+					"org.freedesktop.Telepathy.Connection.Interface.ContactList",
+					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
+					};
 		}
 	}
 
@@ -189,7 +190,13 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	List<uint> sent_requests;
 
 	[DBus (visible = false)]
-	public /*override*/ string[] contact_attribute_interfaces { owned get { return {"org.freedesktop.Telepathy.Connection.Interface.ContactList"}; } }
+	public /*override*/ string[] contact_attribute_interfaces {
+		owned get {
+			return {"org.freedesktop.Telepathy.Connection.Interface.ContactList",
+					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
+					};
+		}
+	}
 
 	public void get_contact_attributes (uint[] handles, string[] interfaces, bool hold,
 										out HashTable<uint, HashTable<string, Variant>> attrs) {
@@ -214,8 +221,11 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 						res[CONTACT_SUBSCRIBE] = SubscriptionState.YES;
 					}
 					break;
+				case "org.freedesktop.Telepathy.Connection.Interface.SimplePresence":
+					res[CONTACT_PRESENCE] = get_presence (handle);
+					break;
 				default:
-					print("%s\n", iface);
+					print("get_contact_attributes: unknown interface %s\n", iface);
 					break;
 				}
 			}
@@ -336,7 +346,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 		var friends = tox.self_get_friend_list ();
 		for(var i = 0; i < friends.length; i++)
-			/* tox friend numbers start at 0; but telepathy handles start at 1 */
+			/* tox friend numbers start at 0, but telepathy handles start at 1 */
 			friends[i]++;
 
 		/*var contacts = new uint[friends.length + 1];
@@ -353,6 +363,173 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 	[DBus (visible=false)]
 	public uint contact_list_state { get; protected set; default = ContactListState.NONE; }
+
+	/* Connection.Interface.SimplePresence implementation */
+	public void set_presence (string status, string status_message) {
+		switch(status) {
+		case "available":
+			tox.self_set_status (Tox.UserStatus.NONE);
+			break;
+		case "away":
+			tox.self_set_status (Tox.UserStatus.AWAY);
+			break;
+		case "busy":
+			tox.self_set_status (Tox.UserStatus.BUSY);
+			break;
+		}
+		tox.self_set_status_message (status_message.data, null);
+
+		presences_changed (get_presences ({ uint.MAX }));
+	}
+
+	SimplePresence get_presence (uint id) {
+		if (id == uint.MAX) {
+			uint presence_type;
+			if (tox.self_get_connection_status () == Tox.Connection.NONE)
+				presence_type = PresenceType.OFFLINE;
+			else switch (tox.self_get_status ()) {
+				case Tox.UserStatus.NONE:
+					presence_type = PresenceType.AVAILABLE;
+					break;
+				case Tox.UserStatus.AWAY:
+					presence_type = PresenceType.AWAY;
+					break;
+				case Tox.UserStatus.BUSY:
+					presence_type = PresenceType.BUSY;
+					break;
+				default:
+					assert_not_reached ();
+				}
+
+			var message = (string) tox.self_get_status_message ();
+			return SimplePresence (presence_type, "", message);
+		}
+
+		/* tox friend numbers start at 0, but telepathy handles start at 1 */
+		var friend_number = id - 1;
+		uint presence_type;
+		if (tox.friend_get_connection_status (friend_number, null) == Tox.Connection.NONE)
+			presence_type = PresenceType.OFFLINE;
+		else switch (tox.friend_get_status (friend_number, null)) {
+			case Tox.UserStatus.NONE:
+				presence_type = PresenceType.AVAILABLE;
+				break;
+			case Tox.UserStatus.AWAY:
+				presence_type = PresenceType.AWAY;
+				break;
+			case Tox.UserStatus.BUSY:
+				presence_type = PresenceType.BUSY;
+				break;
+			default:
+				assert_not_reached ();
+			}
+		debug ("presence %u %u %u", tox.friend_get_connection_status (friend_number, null), tox.friend_get_status(friend_number, null), presence_type);
+		var message = (string) tox.friend_get_status_message (friend_number, null);
+		return SimplePresence (presence_type, "", message);
+	}
+
+	public HashTable<uint, SimplePresence?> get_presences (uint[] contacts) {
+		var res = new HashTable<uint, SimplePresence?> (direct_hash, direct_equal);
+		foreach (var id in contacts) {
+			res[id] = get_presence (id);
+		}
+		return res;
+	}
+
+	void friend_status_callback (Tox tox, uint32 friend_number, Tox.UserStatus status) {
+		debug("friend_status_callback %u", friend_number);
+		uint presence_type;
+		switch (status) {
+		case Tox.UserStatus.NONE:
+			presence_type = PresenceType.AVAILABLE;
+			break;
+		case Tox.UserStatus.AWAY:
+			presence_type = PresenceType.AWAY;
+			break;
+		case Tox.UserStatus.BUSY:
+			presence_type = PresenceType.BUSY;
+			break;
+		default:
+			assert_not_reached ();
+		}
+
+		var message = (string) tox.friend_get_status_message (friend_number, null);
+		var presence = SimplePresence (presence_type, "", message);
+
+		var presences = new HashTable<uint, SimplePresence?> (direct_hash, direct_equal);
+		presences[friend_number + 1] = presence;
+		presences_changed (presences);
+	}
+
+	void friend_status_message_callback (Tox tox, uint32 friend_number, uint8[] message) {
+		debug("friend_status_message_callback %u", friend_number);
+		uint presence_type;
+		switch (tox.friend_get_status (friend_number, null)) {
+		case Tox.UserStatus.NONE:
+			presence_type = PresenceType.AVAILABLE;
+			break;
+		case Tox.UserStatus.AWAY:
+			presence_type = PresenceType.AWAY;
+			break;
+		case Tox.UserStatus.BUSY:
+			presence_type = PresenceType.BUSY;
+			break;
+		default:
+			assert_not_reached ();
+		}
+
+		var presence = SimplePresence (presence_type, "", buffer_to_string (message));
+
+		var presences = new HashTable<uint, SimplePresence?> (direct_hash, direct_equal);
+		presences[friend_number + 1] = presence;
+		presences_changed (presences);
+	}
+
+	void friend_connection_status_callback (Tox tox, uint32 friend_number, Tox.Connection connection_status) {
+		debug("friend_connection_status_callback %u", friend_number);
+		uint presence_type;
+		if (connection_status == Tox.Connection.NONE)
+			presence_type = PresenceType.OFFLINE;
+		else switch (tox.friend_get_status (friend_number, null)) {
+			case Tox.UserStatus.NONE:
+				presence_type = PresenceType.AVAILABLE;
+				break;
+			case Tox.UserStatus.AWAY:
+				presence_type = PresenceType.AWAY;
+				break;
+			case Tox.UserStatus.BUSY:
+				presence_type = PresenceType.BUSY;
+				break;
+			default:
+				assert_not_reached ();
+			}
+		var message = (string) tox.friend_get_status_message (friend_number, null);
+		var presence = SimplePresence (presence_type, "", message);
+
+		var presences = new HashTable<uint, SimplePresence?> (direct_hash, direct_equal);
+		presences[friend_number + 1] = presence;
+		presences_changed (presences);
+	}
+
+
+	//public signal presences_changed (HashTable<uint, SimplePresence> presence);
+
+	HashTable<string, SimpleStatusSpec?> _statuses;
+	public HashTable<string, SimpleStatusSpec?> statuses {
+		owned get {
+			if (_statuses != null) return _statuses;
+
+			_statuses = new HashTable<string, SimpleStatusSpec?> (str_hash, str_equal);
+			_statuses["available"] = SimpleStatusSpec(PresenceType.AVAILABLE, true, true);
+			_statuses["away"] = SimpleStatusSpec(PresenceType.AWAY, true, true);
+			_statuses["busy"] = SimpleStatusSpec(PresenceType.BUSY, true, true);
+			_statuses["offline"] = SimpleStatusSpec(PresenceType.OFFLINE, false, true);
+
+			return _statuses;
+		}
+	}
+	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
+
 
 	void run () {
 		/* Bootstrap from the node defined above */
