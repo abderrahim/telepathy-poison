@@ -5,15 +5,10 @@ const string BOOTSTRAP_ADDRESS = "23.226.230.47";
 const uint16 BOOTSTRAP_PORT = 33445;
 const string BOOTSTRAP_KEY = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074";
 
-const string MY_NAME = "ImoutoBot";
-const string MY_STATUS_MESSAGE = "This is a message!";
-
-
 public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
 	string profile;
 	string profile_filename;
 	bool keep_connecting = true;
-	//bool register;
 	Tox tox;
 
 	weak ConnectionManager cm;
@@ -95,12 +90,6 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		self_contact_changed (self_handle, self_id);
 		print("self address %s\n", hex_address);
 
-		var friends = tox.self_get_friend_list();
-		print("%d friends\n", friends.length);
-		foreach(var friend in friends) {
-			print("friend %u\n", friend);
-			print("%s %s\n", (string)tox.friend_get_name(friend, null), bin_string_to_hex(tox.friend_get_public_key(friend, null)));
-		}
 		contact_list_state = ContactListState.SUCCESS;
 
 		run ();
@@ -189,8 +178,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	HashTable<uint, string> requests = new HashTable<uint, string> (direct_hash, direct_equal);
 	List<uint> sent_requests;
 
-	[DBus (visible = false)]
-	public /*override*/ string[] contact_attribute_interfaces {
+	public string[] contact_attribute_interfaces {
 		owned get {
 			return {"org.freedesktop.Telepathy.Connection.Interface.ContactList",
 					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
@@ -274,7 +262,6 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 
 
-	[DBus (visible = false)]
 	public async void ensure_channel (HashTable<string, Variant> request,
 								out bool yours,
 								out ObjectPath channel,
@@ -310,11 +297,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		properties = props;
 	}
 
-	/*public HashTable<string, Variant> fixed_properties;
-	  public string[] allowed_properties;*/
-
 	RequestableChannel[] requestable_channels = null;
-	[DBus (visible = false)]
 	public RequestableChannel[] requestable_channel_classes {
 		owned get {
 			if (requestable_channels == null) {
@@ -327,7 +310,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			return requestable_channels;
 		}
 	}
-	[DBus (visible = false)]
+
 	public ChannelDetails[] channels {
 		owned get {
 			var res = new ChannelDetails[chans.length];
@@ -349,19 +332,10 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			/* tox friend numbers start at 0, but telepathy handles start at 1 */
 			friends[i]++;
 
-		/*var contacts = new uint[friends.length + 1];
-
-		contacts[0] = self_handle;
-		for(var i = 1; i <= friends.length; i++) {
-			/* tox friend numbers start at 0; but telepathy handles start at 1 and need
-			 * to use one for self. * /
-			contacts[i] = friends[i-1] + 2;
-		}*/
-
 		debug("get_contact_list_attributes (%u friends)", friends.length);
 		get_contact_attributes (friends, interfaces, hold, out attrs);
 	}
-	[DBus (visible=false)]
+
 	public uint contact_list_state { get; protected set; default = ContactListState.NONE; }
 
 	/* Connection.Interface.SimplePresence implementation */

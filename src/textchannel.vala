@@ -45,9 +45,7 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 	/* DBus name and object registration */
 	DBusConnection dbusconn;
 	internal ObjectPath objpath {get; private set;}
-	//uint name_id = 0;
 	uint[] obj_ids = {};
-	//SourceFunc callback = null;
 
 	internal async ObjectPath register (DBusConnection conn, ObjectPath parent) {
 		debug("register %s\n", parent);
@@ -73,7 +71,6 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 		obj_ids = {};
 		closed ();
 	}
-	//public signal void closed ();
 
 	public string channel_type { owned get { return "org.freedesktop.Telepathy.Channel.Type.Text"; } }
 	public string[] interfaces { owned get { return {"org.freedesktop.Telepathy.Channel.Interface.Messages"}; } }
@@ -172,18 +169,11 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 		msg[1]["content-type"] = "text/plain";
 		msg[1]["content"] = buffer_to_string (message);
 
-		/*_pending_messages = new HashTable<string, Variant>[1,2];
-		_pending_messages[0,0] = msg[0];
-		_pending_messages[0,1] = msg[1];*/
 		_pending_messages[msg_id] = Message() { header = msg[0], content = msg[1] };
 
 		message_received (msg);
 
 	}
-
-	/*public signal void message_sent (HashTable<string, Variant>[] content, uint flags, string message_token);
-	public signal void pending_messages_removed (uint[] message_ids);
-	public signal void message_received (HashTable<string, Variant>[] message);*/
 
 	public string[] supported_content_types { owned get { return {"text/plain"}; } }
 	public uint[] message_types {
