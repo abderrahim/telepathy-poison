@@ -107,7 +107,7 @@ public class Tox {
 	[CCode (cname = "_vala_tox_self_get_name")]
 	public uint8[] self_get_name () {
 		var result = new uint8[get_savedata_size()];
-		get_savedata_raw(result);
+		self_get_name_raw(result);
 		return result;
 	}
 

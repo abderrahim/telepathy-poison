@@ -97,6 +97,25 @@ public interface Telepathy.ConnectionContactList : Object, Connection {
 	public abstract uint contact_list_state { get; protected set; }
 }
 
+public struct Telepathy.AliasPair {
+	public AliasPair (uint handle, string alias) {
+		this.handle = handle;
+		this.alias = alias;
+	}
+	public uint handle;
+	public string alias;
+}
+[DBus (name = "org.freedesktop.Telepathy.Connection.Interface.Aliasing")]
+public interface Telepathy.ConnectionAliasing : Object, Connection {
+	public abstract uint get_alias_flags () throws IOError;
+	public abstract string[] request_aliases (uint[] contacts) throws IOError;
+	public abstract HashTable<uint, string> get_aliases (uint[] contacts) throws IOError;
+	public abstract void set_aliases (HashTable<uint, string> aliases) throws IOError;
+
+	public signal void aliases_changed (AliasPair[] aliases);
+	public const string CONTACT_ALIAS = "org.freedesktop.Telepathy.Connection.Interface.Aliasing/alias";
+}
+
 public struct Telepathy.SimplePresence {
 	public SimplePresence (uint type, string status, string? status_message) {
 		this.type = type;

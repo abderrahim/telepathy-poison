@@ -5,7 +5,7 @@ const string BOOTSTRAP_ADDRESS = "23.226.230.47";
 const uint16 BOOTSTRAP_PORT = 33445;
 const string BOOTSTRAP_KEY = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074";
 
-public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
+public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionAliasing, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
 	string profile;
 	string profile_filename;
 	bool keep_connecting = true;
@@ -43,6 +43,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 					conn.register_object<Telepathy.Connection> (objpath, this),
 					conn.register_object<Telepathy.ConnectionRequests> (objpath, this),
 					conn.register_object<Telepathy.ConnectionContacts> (objpath, this),
+					conn.register_object<Telepathy.ConnectionAliasing> (objpath, this),
 					conn.register_object<Telepathy.ConnectionContactList> (objpath, this),
 					conn.register_object<Telepathy.ConnectionSimplePresence> (objpath, this),
 				};
@@ -74,6 +75,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		tox.callback_friend_request(friend_request_callback);
 		tox.callback_friend_message(friend_message_callback);
 		tox.callback_self_connection_status(self_connection_status_callback);
+
+		tox.callback_friend_name (friend_name_callback);
 
 		tox.callback_friend_status(friend_status_callback);
 		tox.callback_friend_status_message(friend_status_message_callback);
@@ -156,6 +159,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		owned get {
 			return {"org.freedesktop.Telepathy.Connection.Interface.Contacts",
 					"org.freedesktop.Telepathy.Connection.Interface.Requests",
+					"org.freedesktop.Telepathy.Connection.Interface.Aliasing",
 					"org.freedesktop.Telepathy.Connection.Interface.ContactList",
 					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
 					};
@@ -180,7 +184,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 	public string[] contact_attribute_interfaces {
 		owned get {
-			return {"org.freedesktop.Telepathy.Connection.Interface.ContactList",
+			return {"org.freedesktop.Telepathy.Connection.Interface.Aliasing",
+					"org.freedesktop.Telepathy.Connection.Interface.ContactList",
 					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
 					};
 		}
@@ -199,6 +204,14 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			debug("%s", (string) res[CONTACT_ID]);
 			foreach (var iface in interfaces) {
 				switch(iface) {
+				case "org.freedesktop.Telepathy.Connection.Interface.Aliasing":
+					if (handle == self_handle)
+						res[CONTACT_ALIAS] = (string) tox.self_get_name ();
+					else {
+						var friend_number = handle - 1;
+						res[CONTACT_ALIAS] = (string) tox.friend_get_name (friend_number, null);
+					}
+					break;
 				case "org.freedesktop.Telepathy.Connection.Interface.ContactList":
 					if (handle in requests) {
 						res[CONTACT_PUBLISH] = SubscriptionState.ASK;
@@ -337,6 +350,43 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 
 	public uint contact_list_state { get; protected set; default = ContactListState.NONE; }
+
+	/* Connection.Interface.Aliasing implementation */
+	public uint get_alias_flags () { return 0; }
+	public string[] request_aliases (uint[] contacts) {
+		var res = new string[contacts.length];
+		for (var i = 0; i < contacts.length; i++) {
+			var friend_number = contacts[i] - 1;
+			res[i] = (string) tox.friend_get_name (friend_number, null);
+		}
+		return res;
+	}
+	public HashTable<uint, string> get_aliases (uint[] contacts) {
+		var res = new HashTable<uint, string> (direct_hash, direct_equal);
+		foreach (var contact in contacts) {
+			if (contact == self_handle) {
+				res[contact] = (string) tox.self_get_name ();
+			} else {
+				var friend_number = contact - 1;
+				res[contact] = (string) tox.friend_get_name (friend_number, null);
+			}
+		}
+		return res;
+	}
+	public void set_aliases (HashTable<uint, string> aliases) {
+		if (self_handle in aliases) {
+			var name = aliases[self_handle];
+			tox.self_set_name (name.data, null);
+			var changed = new AliasPair[] { AliasPair(self_handle, name) };
+			aliases_changed (changed);
+		}
+	}
+
+	void friend_name_callback (Tox tox, uint32 friend_number, uint8[] name) {
+		var handle = friend_number + 1;
+		var changed = new AliasPair[] { AliasPair(handle, buffer_to_string (name)) };
+		aliases_changed (changed);
+	}
 
 	/* Connection.Interface.SimplePresence implementation */
 	public void set_presence (string status, string status_message) {
