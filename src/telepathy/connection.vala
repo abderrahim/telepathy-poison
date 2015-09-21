@@ -83,18 +83,43 @@ public interface Telepathy.ConnectionContacts : Object, Connection {
 }
 
 public enum Telepathy.ContactListState { NONE, WAITING, FAILURE, SUCCESS }
+public enum Telepathy.SubscriptionState { UNKNOWN, NO, REMOVED_REMOTELY, ASK, YES }
+
+public struct Telepathy.ContactSubscriptions {
+	public ContactSubscriptions (uint subscribe, uint publish, string publish_request) {
+		this.subscribe = subscribe;
+		this.publish = publish;
+		this.publish_request = publish_request;
+	}
+	public uint subscribe;
+	public uint publish;
+	public string publish_request;
+}
 
 [DBus (name = "org.freedesktop.Telepathy.Connection.Interface.ContactList")]
 public interface Telepathy.ConnectionContactList : Object, Connection {
+	public abstract void get_contact_list_attributes(string[] interfaces, bool hold, out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError;
+
+	public abstract void request_subscription (uint[] contacts, string message) throws IOError;
+	public abstract void authorize_publication (uint[] contacts) throws IOError;
+	public abstract void remove_contacts (uint[] contacts) throws IOError;
+	public abstract void unsubscribe (uint[] contacts) throws IOError;
+	public abstract void unpublish (uint[] contacts) throws IOError;
+	public abstract void download () throws IOError;
+
+	public signal void contact_list_state_changed (uint contact_list_state);
+	[DBus (name = "ContactsChangedWithID")]
+	public signal void contacts_changed_with_id (HashTable<uint, ContactSubscriptions?> changes, HashTable<uint, string> identifiers, HashTable<uint, string> removals);
+
+	public abstract uint contact_list_state { get; }
+	public abstract bool contact_list_persists { get; }
+	public abstract bool can_change_contact_list { get; }
+	public abstract bool request_uses_message { get; }
+	public abstract bool download_at_connection { get; }
 
 	public const string CONTACT_SUBSCRIBE = "org.freedesktop.Telepathy.Connection.Interface.ContactList/subscribe";
 	public const string CONTACT_PUBLISH = "org.freedesktop.Telepathy.Connection.Interface.ContactList/publish";
 	public const string CONTACT_PUBLISH_REQUEST = "org.freedesktop.Telepathy.Connection.Interface.ContactList/publish-request";
-
-	public enum SubscriptionState {UNKNOWN, NO, REMOVED_REMOTELY, ASK, YES}
-	
-	public abstract void get_contact_list_attributes(string[] interfaces, bool hold, out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError;
-	public abstract uint contact_list_state { get; protected set; }
 }
 
 public struct Telepathy.AliasPair {
@@ -136,6 +161,7 @@ public struct Telepathy.SimpleStatusSpec {
 	bool may_set_on_self;
 	bool can_have_message;
 }
+
 
 [DBus (name = "org.freedesktop.Telepathy.Connection.Interface.SimplePresence")]
 public interface Telepathy.ConnectionSimplePresence : Object, Connection {

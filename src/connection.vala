@@ -72,40 +72,28 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 		tox = new Tox(opt, null);
 		/* Register the callbacks */
-		tox.callback_friend_request(friend_request_callback);
-		tox.callback_friend_message(friend_message_callback);
 		tox.callback_self_connection_status(self_connection_status_callback);
+
+		tox.callback_friend_message(friend_message_callback);
+
+		tox.callback_friend_request(friend_request_callback);
 
 		tox.callback_friend_name (friend_name_callback);
 
 		tox.callback_friend_status(friend_status_callback);
 		tox.callback_friend_status_message(friend_status_message_callback);
 		tox.callback_friend_connection_status(friend_connection_status_callback);
-		/* Define or load some user details for the sake of it */
-		// Sets the username
-		//tox.self_set_name(MY_NAME.data, null);
 
 		var address = tox.self_get_address();
 
 		var hex_address = bin_string_to_hex(address);
 		_self_id = hex_address;
-		//self_handle_changed (self_handle);
 		self_contact_changed (self_handle, self_id);
 		print("self address %s\n", hex_address);
 
-		contact_list_state = ContactListState.SUCCESS;
+		contact_list_state_changed (ContactListState.SUCCESS);
 
 		run ();
-	}
-	void friend_request_callback(Tox tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
-								 uint8[] message) {
-		print("friend_request_callback\n");
-		print("friend request from %s: %s\n",
-			  bin_string_to_hex(public_key),
-			  ((string)message).escape(""));
-		int err;
-		tox.friend_add_norequest(public_key, out err);
-		print("friend added: %d\n", err);
 	}
 
 	void friend_message_callback(Tox tox, uint32 friend_number,
@@ -169,19 +157,50 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public bool has_immortal_handles { get { return true; } }
 	public void hold_handles (uint handle_type, uint[] handles) {}
 	public void release_handles (uint handle_type, uint[] handles) {}
+
+	/* 
+	 * Telepathy handles are mapped this way:
+	 * - self is uint.MAX
+	 * - friends are friend_number + 1
+	 * - others are assigned values decreasing from uint.MAX - 1
+	 */
+
+	uint next_handle = uint.MAX - 1;
+	HashTable<uint, string> handles = new HashTable<uint, string> (direct_hash, direct_equal);
 	public uint[] request_handles (uint handle_type, string[] identifiers) {
-		print("request_handles %s\n", string.join(" ", identifiers));
-		return {};
+		return_val_if_fail (handle_type == HandleType.CONTACT, new uint[0]);
+
+		var res = new uint[identifiers.length];
+		for (var i = 0; i < identifiers.length; i++) {
+			var friend_number = tox.friend_by_public_key (hex_string_to_bin (identifiers[i]), null);
+			if (friend_number != uint32.MAX) {
+				res[i] = friend_number + 1;
+			} else {
+				uint handle = 0;
+				handles.find ((k, v) => {
+					if (v == identifiers[i]) {
+						handle = k;
+						return true;
+					}
+					return false;
+				});
+
+				if (handle != 0) {
+					res[i] = handle;
+				} else {
+					handles[next_handle] = identifiers[i];
+					info("handle %u -> %s", next_handle, identifiers[i]);
+					res[i] = next_handle--;
+				}
+			}
+		}
+		return res;
 	}
 
 	public void add_client_interest (string[] tokens) {}
 	public void remove_client_interest (string[] tokens) {}
 
 	/* Connection.Interface.Contacts implementation */
-
-	HashTable<uint, string> requests = new HashTable<uint, string> (direct_hash, direct_equal);
-	List<uint> sent_requests;
-
 	public string[] contact_attribute_interfaces {
 		owned get {
 			return {"org.freedesktop.Telepathy.Connection.Interface.Aliasing",
@@ -191,36 +210,40 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 	}
 
-	public void get_contact_attributes (uint[] handles, string[] interfaces, bool hold,
+	public void get_contact_attributes (uint[] contacts, string[] interfaces, bool hold,
 										out HashTable<uint, HashTable<string, Variant>> attrs) {
-		debug("get_contact_attributes (%d)", handles.length);
+		debug("get_contact_attributes (%d)", contacts.length);
 		attrs = new HashTable<uint, HashTable<string, Variant>> (direct_hash, direct_equal);
-		foreach (var handle in handles) {
+		foreach (var handle in contacts) {
 			var res = new HashTable<string, Variant> (str_hash, str_equal);
-			if (handle == uint32.MAX)
+			if (handle == self_handle)
 				res[CONTACT_ID] = bin_string_to_hex(tox.self_get_public_key ());
-			else
-				res[CONTACT_ID] = bin_string_to_hex(tox.friend_get_public_key (handle - 1, null));
+			else if (handle in handles) {
+				print("%u is in handles\n", handle);
+				res[CONTACT_ID] = handles[handle];
+			} else {
+				var friend_number = handle - 1;
+				res[CONTACT_ID] = bin_string_to_hex(tox.friend_get_public_key (friend_number, null));
+			}
 			debug("%s", (string) res[CONTACT_ID]);
 			foreach (var iface in interfaces) {
 				switch(iface) {
 				case "org.freedesktop.Telepathy.Connection.Interface.Aliasing":
 					if (handle == self_handle)
 						res[CONTACT_ALIAS] = (string) tox.self_get_name ();
-					else {
+					else if (!(handle in handles)) {
 						var friend_number = handle - 1;
-						res[CONTACT_ALIAS] = (string) tox.friend_get_name (friend_number, null);
+						var friend_name = tox.friend_get_name (friend_number, null);
+						if (friend_name != null)
+							res[CONTACT_ALIAS] = (string) friend_name;
 					}
 					break;
 				case "org.freedesktop.Telepathy.Connection.Interface.ContactList":
-					if (handle in requests) {
-						res[CONTACT_PUBLISH] = SubscriptionState.ASK;
-						res[CONTACT_PUBLISH_REQUEST] = requests[handle];
-						res[CONTACT_SUBSCRIBE] = SubscriptionState.NO;
-					} else {
-						res[CONTACT_PUBLISH] = SubscriptionState.YES;
-						res[CONTACT_SUBSCRIBE] = SubscriptionState.YES;
-					}
+					var subs = get_subscription_state (handle);
+					res[CONTACT_SUBSCRIBE] = subs.subscribe;
+					res[CONTACT_PUBLISH] = subs.publish;
+					if (subs.publish_request != "")
+						res[CONTACT_PUBLISH_REQUEST] = subs.publish_request;
 					break;
 				case "org.freedesktop.Telepathy.Connection.Interface.SimplePresence":
 					res[CONTACT_PRESENCE] = get_presence (handle);
@@ -339,17 +362,146 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	/* Connection.Interface.ContactList implementation */
 	public void get_contact_list_attributes(string[] interfaces, bool hold,
 											out HashTable<uint, HashTable<string, Variant>> attrs) {
-
 		var friends = tox.self_get_friend_list ();
+		debug("get_contact_list_attributes (%u friends, %u requests)", friends.length, handles.length);
+		var contacts = new uint[friends.length + received_requests.length];
 		for(var i = 0; i < friends.length; i++)
 			/* tox friend numbers start at 0, but telepathy handles start at 1 */
-			friends[i]++;
+			contacts[i] = friends[i] + 1;
 
-		debug("get_contact_list_attributes (%u friends)", friends.length);
-		get_contact_attributes (friends, interfaces, hold, out attrs);
+		var i = friends.length;
+		foreach (var handle in received_requests.get_keys ()) {
+			contacts[i++] = handle;
+			print("%u\n", handle);
+		}
+		get_contact_attributes (contacts, interfaces, hold, out attrs);
 	}
 
-	public uint contact_list_state { get; protected set; default = ContactListState.NONE; }
+	/* There are four possible subscription states for a tox contact:
+	 * - They have sent a friend request, and it hasn't yet been accepted
+	 *   (in handles, received_requests) => subscribe=no, publish=ask
+	 * - We are about to send them a friend request
+	 *   (in handles) => subscribe=no, publish=no
+	 * - They are on the friend list, and a request has been sent this session (and we could not yet connect)
+	 *   (in sent_requests and the friend list) => subscribe=ask, publish=yes
+	 * - They are on the friend list, but a request hasn't been sent this session, or has been accepted
+	 *   (unless we are currently connected, this could mean many things but we cannot distinguish between them)
+	 *   (in the friend list) => subscribe=yes, publish=yes
+	 *
+	 * (This will change with the new groupchats, but this will do for now)
+	 */
+
+	HashTable<uint, string> received_requests = new HashTable<uint, string> (direct_hash, direct_equal);
+	GenericSet<uint> sent_requests = new GenericSet<uint> (direct_hash, direct_equal);
+
+	ContactSubscriptions get_subscription_state (uint handle) {
+		if (handle in received_requests) {
+			return ContactSubscriptions (SubscriptionState.NO, SubscriptionState.ASK, received_requests[handle]);
+		} else if (handle in sent_requests) {
+			return ContactSubscriptions (SubscriptionState.ASK, SubscriptionState.YES, "");
+		} else if (handle in handles) {
+			return ContactSubscriptions (SubscriptionState.NO, SubscriptionState.NO, "");
+		} else {
+			return ContactSubscriptions (SubscriptionState.YES, SubscriptionState.YES, "");
+		}
+	}
+
+	public void request_subscription (uint[] contacts, string message) {
+		var changes = new HashTable<uint, ContactSubscriptions?> (direct_hash, direct_equal);
+		var identifiers = new HashTable<uint, string> (direct_hash, direct_equal);
+		var removals = new HashTable<uint, string> (direct_hash, direct_equal);
+		foreach (var contact in contacts) {
+			if (contact in handles) {
+				int err;
+				if (message == null || message == "")
+					message = "No message";
+				var friend_number = tox.friend_add (hex_string_to_bin (handles[contact]), message.data, out err);
+				if (err != 0) {
+					warning ("friend_add %s %d", handles[contact], err);
+					continue;
+				}
+
+				var new_handle = friend_number + 1;
+				sent_requests.add (new_handle);
+				changes[new_handle] = ContactSubscriptions (SubscriptionState.ASK, SubscriptionState.YES, "");
+				identifiers[new_handle] = handles[contact];
+
+				removals[contact] = handles[contact];
+				handles.remove (contact);
+			} else
+				warning ("address for handle %u unknown", contact);
+		}
+		contacts_changed_with_id (changes, identifiers, removals);
+	}
+	public void authorize_publication (uint[] contacts) {
+		var changes = new HashTable<uint, ContactSubscriptions?> (direct_hash, direct_equal);
+		var identifiers = new HashTable<uint, string> (direct_hash, direct_equal);
+		var removals = new HashTable<uint, string> (direct_hash, direct_equal);
+
+		foreach (var contact in contacts) {
+			if (contact in handles) {
+				var friend_number = tox.friend_add_norequest (hex_string_to_bin (handles[contact]), null);
+				var new_handle = friend_number + 1;
+				changes[new_handle] = ContactSubscriptions (SubscriptionState.YES, SubscriptionState.YES, "");
+				identifiers[new_handle] = handles[contact];
+
+				removals[contact] = handles[contact];
+				received_requests.remove (contact);
+				handles.remove (contact);
+			}
+		}
+		contacts_changed_with_id (changes, identifiers, removals);
+	}
+
+	public void remove_contacts (uint[] contacts) {
+		var removals = new HashTable<uint, string> (direct_hash, direct_equal);
+
+		foreach (var handle in contacts) {
+			var friend_number = handle - 1;
+			var ident = bin_string_to_hex (tox.friend_get_public_key (friend_number, null));
+			tox.friend_delete (friend_number, null);
+			removals[handle] = ident;
+		}
+		contacts_changed_with_id (new HashTable<uint, ContactSubscriptions?> (direct_hash, direct_equal),
+								  new HashTable<uint, string> (direct_hash, direct_equal),
+								  removals);
+	}
+
+	public void unsubscribe (uint[] contacts) {
+		remove_contacts (contacts);
+	}
+	public void unpublish (uint[] contacts) {
+		remove_contacts (contacts);
+	}
+	public void download () {}
+
+	void friend_request_callback(Tox tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
+								 uint8[] message) {
+		print("friend_request_callback\n");
+		print("friend request from %s: %s\n",
+			  bin_string_to_hex(public_key),
+			  ((string)message).escape(""));
+
+		var identifier = bin_string_to_hex (public_key);
+		var handle = next_handle--;
+
+		handles[handle] = identifier;
+		received_requests[handle] = buffer_to_string (message);
+
+		var changes = new HashTable<uint, ContactSubscriptions?> (direct_hash, direct_equal);
+		var identifiers = new HashTable<uint, string> (direct_hash, direct_equal);
+
+		changes[handle] = ContactSubscriptions (SubscriptionState.NO, SubscriptionState.ASK, received_requests[handle]);
+		identifiers[handle] = identifier;
+
+		contacts_changed_with_id (changes, identifiers, new HashTable<uint, string> (direct_hash, direct_equal));
+	}
+
+	public uint contact_list_state { get { return ContactListState.SUCCESS; } }
+	public bool contact_list_persists { get { return true; } }
+	public bool can_change_contact_list { get { return true; } }
+	public bool request_uses_message { get { return true; } }
+	public bool download_at_connection { get { return true; } }
 
 	/* Connection.Interface.Aliasing implementation */
 	public uint get_alias_flags () { return 0; }
@@ -406,8 +558,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		presences_changed (get_presences ({ uint.MAX }));
 	}
 
-	SimplePresence get_presence (uint id) {
-		if (id == uint.MAX) {
+	SimplePresence get_presence (uint handle) {
+		if (handle == self_handle) {
 			uint presence_type;
 			if (tox.self_get_connection_status () == Tox.Connection.NONE)
 				presence_type = PresenceType.OFFLINE;
@@ -429,8 +581,11 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			return SimplePresence (presence_type, "", message);
 		}
 
+		if (handle in received_requests || handle in sent_requests || handle in handles)
+			return SimplePresence (PresenceType.UNKNOWN, "", "");
+
 		/* tox friend numbers start at 0, but telepathy handles start at 1 */
-		var friend_number = id - 1;
+		var friend_number = handle - 1;
 		uint presence_type;
 		if (tox.friend_get_connection_status (friend_number, null) == Tox.Connection.NONE)
 			presence_type = PresenceType.OFFLINE;
@@ -447,7 +602,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			default:
 				assert_not_reached ();
 			}
-		debug ("presence %u %u %u", tox.friend_get_connection_status (friend_number, null), tox.friend_get_status(friend_number, null), presence_type);
+
 		var message = (string) tox.friend_get_status_message (friend_number, null);
 		return SimplePresence (presence_type, "", message);
 	}
@@ -511,6 +666,10 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 	void friend_connection_status_callback (Tox tox, uint32 friend_number, Tox.Connection connection_status) {
 		debug("friend_connection_status_callback %u", friend_number);
+		var handle = friend_number + 1;
+		if (handle in sent_requests)
+			sent_requests.remove (handle);
+
 		uint presence_type;
 		if (connection_status == Tox.Connection.NONE)
 			presence_type = PresenceType.OFFLINE;
@@ -531,12 +690,10 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		var presence = SimplePresence (presence_type, "", message);
 
 		var presences = new HashTable<uint, SimplePresence?> (direct_hash, direct_equal);
-		presences[friend_number + 1] = presence;
+		presences[handle] = presence;
 		presences_changed (presences);
 	}
 
-
-	//public signal presences_changed (HashTable<uint, SimplePresence> presence);
 
 	HashTable<string, SimpleStatusSpec?> _statuses;
 	public HashTable<string, SimpleStatusSpec?> statuses {
@@ -553,7 +710,6 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 	}
 	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
-
 
 	void run () {
 		/* Bootstrap from the node defined above */
