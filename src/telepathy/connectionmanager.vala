@@ -1,4 +1,10 @@
 public struct Telepathy.ParamSpec {
+	public ParamSpec (string name, uint flags, string signature, Variant default_value) {
+		this.name = name;
+		this.flags = flags;
+		this.signature = signature;
+		this.default_value = default_value;
+	}
 	string name;
 	uint flags;
 	string signature;
