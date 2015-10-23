@@ -418,6 +418,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			} else
 				warning ("address for handle %u unknown", contact);
 		}
+
+		save_tox_data ();
 		contacts_changed_with_id (changes, identifiers, removals);
 	}
 	public void authorize_publication (uint[] contacts) {
@@ -437,6 +439,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 				handles.remove (contact);
 			}
 		}
+
+		save_tox_data ();
 		contacts_changed_with_id (changes, identifiers, removals);
 	}
 
@@ -449,6 +453,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			tox.friend_delete (friend_number, null);
 			removals[handle] = ident;
 		}
+
+		save_tox_data ();
 		contacts_changed_with_id (new HashTable<uint, ContactSubscriptions?> (direct_hash, direct_equal),
 								  new HashTable<uint, string> (direct_hash, direct_equal),
 								  removals);
@@ -516,6 +522,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		if (self_handle in aliases) {
 			var name = aliases[self_handle];
 			tox.self_set_name (name.data, null);
+
+			save_tox_data ();
 			var changed = new AliasPair[] { AliasPair(self_handle, name) };
 			aliases_changed (changed);
 		}
@@ -542,6 +550,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 		tox.self_set_status_message (status_message.data, null);
 
+		save_tox_data ();
 		presences_changed (get_presences ({ uint.MAX }));
 	}
 
@@ -698,6 +707,12 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
 
+	void save_tox_data () {
+		var savedata = tox.get_savedata();
+		FileUtils.set_data(profile_filename, savedata);
+		print("savedata written\n");
+	}
+
 	void run () {
 		/* Bootstrap from the node defined above */
 		int err;
@@ -723,9 +738,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 				Bus.unown_name (name_id);
 				name_id = 0;
 
-				var savedata = tox.get_savedata();
-				FileUtils.set_data(profile_filename, savedata);
-				print("savedata written\n");
+				save_tox_data ();
 
 				tox = null;
 			}
