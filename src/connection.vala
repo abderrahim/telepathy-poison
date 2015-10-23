@@ -6,17 +6,17 @@ const uint16 BOOTSTRAP_PORT = 33445;
 const string BOOTSTRAP_KEY = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074";
 
 public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionAliasing, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
-	string profile;
+	public string profile { private get; construct; }
+	public ConnectionManager cm { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
 	Tox tox;
 
-	weak ConnectionManager cm;
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
 
-	public Connection (ConnectionManager cm, SourceFunc callback) {
-		this.cm = cm;
+	public Connection (ConnectionManager cm, string profile, string? password, bool create, SourceFunc callback) {
+		Object (cm: cm, profile: profile);
 		this.callback = callback;
 	}
 
@@ -27,8 +27,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	uint[] obj_ids = {};
 
 	construct {
-		profile = "tox_save";
-		var escprofile = "tox_save";
+		print("%s\n", profile);
+		var escprofile = profile;
 
 		busname = "org.freedesktop.Telepathy.Connection.poison.tox.%s".printf(escprofile);
 		objpath = new ObjectPath ("/org/freedesktop/Telepathy/Connection/poison/tox/%s".printf(escprofile));
@@ -145,12 +145,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 	public string[] interfaces {
 		owned get {
-			return {"org.freedesktop.Telepathy.Connection.Interface.Contacts",
-					"org.freedesktop.Telepathy.Connection.Interface.Requests",
-					"org.freedesktop.Telepathy.Connection.Interface.Aliasing",
-					"org.freedesktop.Telepathy.Connection.Interface.ContactList",
-					"org.freedesktop.Telepathy.Connection.Interface.SimplePresence",
-					};
+			return cm.proto.connection_interfaces;
 		}
 	}
 
@@ -333,17 +328,9 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		properties = props;
 	}
 
-	RequestableChannel[] requestable_channels = null;
 	public RequestableChannel[] requestable_channel_classes {
 		owned get {
-			if (requestable_channels == null) {
-				var fixed_properties = new HashTable<string, Variant> (str_hash, str_equal);
-				fixed_properties["org.freedesktop.Telepathy.Channel.ChannelType"] = "org.freedesktop.Telepathy.Channel.Type.Text";
-				fixed_properties["org.freedesktop.Telepathy.Channel.TargetHandleType"] = HandleType.CONTACT;
-				var allowed_properties = new string[] {"org.freedesktop.Telepathy.Channel.TargetHandle", "org.freedesktop.Telepathy.Channel.TargetID"};
-				requestable_channels = { RequestableChannel () { fixed_properties = fixed_properties, allowed_properties = allowed_properties}};
-			}
-			return requestable_channels;
+			return cm.proto.requestable_channel_classes;
 		}
 	}
 
