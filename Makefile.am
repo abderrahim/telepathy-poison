@@ -20,9 +20,22 @@ telepathy_poison_VALAFLAGS = $(AM_VALAFLAGS) --pkg gio-2.0 --pkg libtoxcore --pk
 telepathy_poison_CFLAGS = $(AM_CFLAGS) $(GIO_CFLAGS) $(TOX_CFLAGS)
 telepathy_poison_LDADD = $(GIO_LIBS) $(TOX_LIBS)
 
+
+servicedir = $(datadir)/dbus-1/services/
+service_DATA = data/org.freedesktop.Telepathy.ConnectionManager.poison.service
+DISTCLEANFILES = $(service_DATA)
+
+data/org.freedesktop.Telepathy.ConnectionManager.poison.service: Makefile
+	$(AM_V_GEN) (echo '[D-BUS Service]'; \
+                     echo 'Name=org.freedesktop.Telepathy.ConnectionManager.poison'; \
+                     echo 'Exec=${bindir}/telepathy-poison') > $@.tmp && \
+                    mv $@.tmp $@
+
+
 EXTRA_DIST = \
 	COPYING
 #\
 #	INSTALL
+
 
 -include $(top_srcdir)/git.mk
