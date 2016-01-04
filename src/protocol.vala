@@ -15,6 +15,7 @@ public class Protocol : Object, Telepathy.Protocol {
 				Telepathy.ParamSpec ("profile", Telepathy.ParamFlags.REQUIRED, "s", ""),
 				Telepathy.ParamSpec ("password", Telepathy.ParamFlags.REGISTER | Telepathy.ParamFlags.SECRET, "s", ""),
 				Telepathy.ParamSpec ("create profile", Telepathy.ParamFlags.HAS_DEFAULT, "b", false),
+				Telepathy.ParamSpec ("enable UDP", Telepathy.ParamFlags.HAS_DEFAULT, "b", true),
 			};
 		}
 	}

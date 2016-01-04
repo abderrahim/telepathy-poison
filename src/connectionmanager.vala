@@ -37,8 +37,9 @@ public class ConnectionManager : Object, Telepathy.ConnectionManager {
 		var profile = (string) parameters["profile"];
 		var password = ("password" in parameters) ? (string) parameters["password"] : null;
 		var create = ("create profile" in parameters) ? (bool) parameters["create profile"] : false;
+		var enable_udp = ("enable UDP" in parameters) ? (bool) parameters["enable UDP"] : true;
 
-		var conn = new Connection (this, profile, password, create, request_connection.callback);
+		var conn = new Connection (this, profile, password, create, enable_udp, request_connection.callback);
 		yield;
 		print("cont\n");
 
