@@ -1,13 +1,30 @@
 using Telepathy;
 using Util;
 
-const string BOOTSTRAP_ADDRESS = "23.226.230.47";
-const uint16 BOOTSTRAP_PORT = 33445;
-const string BOOTSTRAP_KEY = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074";
+struct Node {
+	public string address;
+	public uint16 port;
+	public string key;
+}
+
+const Node[] nodes = {
+	{"23.226.230.47", 33445, "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"},
+	{"144.76.60.215", 33445, "04119E835DF3E78BACF0F84235B300546AF8B936F035185E2A8E9E0A67C8924F"},
+	{"23.226.230.47", 33445, "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"},
+	{"178.62.250.138", 33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B"},
+	{"130.133.110.14", 33445, "461FA3776EF0FA655F1A05477DF1B3B614F7D6B124F7DB1DD4FE3C08B03B640F"},
+	{"104.167.101.29", 33445, "5918AC3C06955962A75AD7DF4F80A5D7C34F7DB9E1498D2E0495DE35B3FE8A57"},
+	{"205.185.116.116", 33445, "A179B09749AC826FF01F37A9613F6B57118AE014D4196A0E1105A98F93A54702"},
+	{"198.98.51.198", 33445, "1D5A5F2F5D6233058BF0259B09622FB40B482E4FA0931EB8FD3AB8E7BF7DAF6F"},
+	{"194.249.212.109", 33445, "3CEE1F054081E7A011234883BC4FC39F661A55B73637A5AC293DDF1251D9432B"},
+	{"185.25.116.107", 33445, "DA4E4ED4B697F2E9B000EEFE3A34B554ACD3F45F5C96EAEA2516DD7FF9AF7B43"},
+	{"192.99.168.140", 33445, "6A4D0607A296838434A6A7DDF99F50EF9D60A2C510BBF31FE538A25CB6B4652F"},
+};
 
 public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionAliasing, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
 	public string profile { private get; construct; }
 	public ConnectionManager cm { private get; construct; }
+	public bool enable_udp { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
 	Tox tox;
@@ -15,8 +32,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
 
-	public Connection (ConnectionManager cm, string profile, string? password, bool create, SourceFunc callback) {
-		Object (cm: cm, profile: profile);
+	public Connection (ConnectionManager cm, string profile, string? password, bool create, bool enable_udp, SourceFunc callback) {
+		Object (cm: cm, profile: profile, enable_udp: enable_udp);
 		this.callback = callback;
 	}
 
@@ -69,6 +86,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		var opt = new Tox.Options (null);
 		opt.savedata_type = Tox.SavedataType.TOX_SAVE;
 		opt.savedata = savedata;
+		opt.udp_enabled = enable_udp;
+		print("Enable UDP: %s\n", opt.udp_enabled ? "yes" : "no");
 
 		tox = new Tox(opt, null);
 		/* Register the callbacks */
@@ -135,6 +154,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		debug("%s connect", profile);
 
 		_status = ConnectionStatus.CONNECTING;
+		keep_connecting = true;
 		status_changed (ConnectionStatus.CONNECTING, ConnectionStatusReason.REQUESTED);
 	}
 	public new void disconnect () {
@@ -714,11 +734,13 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 
 	void run () {
-		/* Bootstrap from the node defined above */
+		/* Bootstrap from the nodes defined above */
 		int err;
-		var bootstrap_pub_key = hex_string_to_bin(BOOTSTRAP_KEY);
-		tox.bootstrap(BOOTSTRAP_ADDRESS, BOOTSTRAP_PORT, bootstrap_pub_key, out err);
-		print("bootstrap %d\n", err);
+		for(int i=0; i<nodes.length; i++) {
+			var bootstrap_pub_key = hex_string_to_bin(nodes[i].key);
+			tox.bootstrap(nodes[i].address, nodes[i].port, bootstrap_pub_key, out err);
+			print("Bootstrapping from %s:%d (status: %d)\n", nodes[i].address, nodes[i].port, err);
+		}
 		//...
 
 		SourceFunc tox_iterate = null;
@@ -726,9 +748,9 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			// will call the callback functions defined and registered
 			tox.iterate();
 
-			if (keep_connecting)
+			if (keep_connecting) {
 				Timeout.add (tox.iteration_interval, tox_iterate);
-			else {
+			} else {
 				print("unregistering connection\n");
 				foreach (var id in obj_ids) {
 					dbusconn.unregister_object(id);
