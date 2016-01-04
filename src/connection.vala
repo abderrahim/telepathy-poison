@@ -164,7 +164,6 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		debug("%s connect", profile);
 
 		_status = ConnectionStatus.CONNECTING;
-		keep_connecting = true;
 		status_changed (ConnectionStatus.CONNECTING, ConnectionStatusReason.REQUESTED);
 	}
 	public new void disconnect () {
@@ -745,11 +744,14 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 	void run () {
 		/* Bootstrap from the nodes defined above */
-		int err;
+		int udp_err, tcp_err;
 		for(int i=0; i<nodes.length; i++) {
+			udp_err = tcp_err = -1;
 			var bootstrap_pub_key = hex_string_to_bin(nodes[i].key);
-			tox.bootstrap(nodes[i].address, nodes[i].port, bootstrap_pub_key, out err);
-			print("Bootstrapping from %s:%d (status: %d)\n", nodes[i].address, nodes[i].port, err);
+			tox.bootstrap(nodes[i].address, nodes[i].port, bootstrap_pub_key, out udp_err);
+			// If TCP relays are to be used, explicitly tell the core to initialize a few
+			if(!enable_udp && i<10) tox.add_tcp_relay(nodes[i].address, nodes[i].port, bootstrap_pub_key, out tcp_err);
+			print("bootstrap %s:%d (status: %d UDP, %d TCP)\n", nodes[i].address, nodes[i].port, udp_err, tcp_err);
 		}
 		//...
 
