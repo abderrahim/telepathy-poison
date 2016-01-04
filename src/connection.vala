@@ -1,13 +1,38 @@
 using Telepathy;
 using Util;
 
-const string BOOTSTRAP_ADDRESS = "23.226.230.47";
-const uint16 BOOTSTRAP_PORT = 33445;
-const string BOOTSTRAP_KEY = "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074";
+struct Node {
+	public string address;
+	public uint16 port;
+	public string key;
+}
+
+const Node[] nodes = {
+	{"23.226.230.47", 33445, "A09162D68618E742FFBCA1C2C70385E6679604B2D80EA6E84AD0996A1AC8A074"},
+	{"178.62.250.138", 33445, "788236D34978D1D5BD822F0A5BEBD2C53C64CC31CD3149350EE27D4D9A2F9B6B"},
+	{"130.133.110.14", 33445, "461FA3776EF0FA655F1A05477DF1B3B614F7D6B124F7DB1DD4FE3C08B03B640F"},
+	{"104.167.101.29", 33445, "5918AC3C06955962A75AD7DF4F80A5D7C34F7DB9E1498D2E0495DE35B3FE8A57"},
+	{"205.185.116.116", 33445, "A179B09749AC826FF01F37A9613F6B57118AE014D4196A0E1105A98F93A54702"},
+	{"198.98.51.198", 33445, "1D5A5F2F5D6233058BF0259B09622FB40B482E4FA0931EB8FD3AB8E7BF7DAF6F"},
+	{"194.249.212.109", 33445, "3CEE1F054081E7A011234883BC4FC39F661A55B73637A5AC293DDF1251D9432B"},
+	{"185.25.116.107", 33445, "DA4E4ED4B697F2E9B000EEFE3A34B554ACD3F45F5C96EAEA2516DD7FF9AF7B43"},
+	{"192.99.168.140", 33445, "6A4D0607A296838434A6A7DDF99F50EF9D60A2C510BBF31FE538A25CB6B4652F"},
+	{"95.215.46.114", 33445, "5823FB947FF24CF83DDFAC3F3BAA18F96EA2018B16CC08429CB97FA502F40C23"},
+	{"5.189.176.217", 5190, "2B2137E094F743AC8BD44652C55F41DFACC502F125E99E4FE24D40537489E32F"},
+	{"148.251.23.146", 2306, "7AED21F94D82B05774F697B209628CD5A9AD17E0C073D9329076A4C28ED28147"},
+	{"104.223.122.15", 33445, "0FB96EEBFB1650DDB52E70CF773DDFCABE25A95CC3BB50FC251082E4B63EF82A"},
+	{"78.47.114.252", 33445, "1C5293AEF2114717547B39DA8EA6F1E331E5E358B35F9B6B5F19317911C5F976"},
+	{"81.4.110.149", 33445, "9E7BD4793FFECA7F32238FA2361040C09025ED3333744483CA6F3039BFF0211E"},
+	{"95.31.20.151", 33445, "9CA69BB74DE7C056D1CC6B16AB8A0A38725C0349D187D8996766958584D39340"},
+	{"104.233.104.126", 33445, "EDEE8F2E839A57820DE3DA4156D88350E53D4161447068A3457EE8F59F362414"},
+	{"51.254.84.212", 33445, "AEC204B9A4501412D5F0BB67D9C81B5DB3EE6ADA64122D32A3E9B093D544327D"},
+	{"5.135.59.163", 33445, "2D320F971EF2CA18004416C2AAE7BA52BF7949DB34EA8E2E21AF67BD367BE211"},
+};
 
 public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequests, Telepathy.ConnectionContacts, Telepathy.ConnectionAliasing, Telepathy.ConnectionContactList, Telepathy.ConnectionSimplePresence {
 	public string profile { private get; construct; }
 	public ConnectionManager cm { private get; construct; }
+	public bool enable_udp { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
 	Tox tox;
@@ -15,8 +40,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
 
-	public Connection (ConnectionManager cm, string profile, string? password, bool create, SourceFunc callback) {
-		Object (cm: cm, profile: profile);
+	public Connection (ConnectionManager cm, string profile, string? password, bool create, bool enable_udp, SourceFunc callback) {
+		Object (cm: cm, profile: profile, enable_udp: enable_udp);
 		this.callback = callback;
 	}
 
@@ -69,6 +94,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		var opt = new Tox.Options (null);
 		opt.savedata_type = Tox.SavedataType.TOX_SAVE;
 		opt.savedata = savedata;
+		opt.udp_enabled = enable_udp;
+		print("Enable UDP: %s\n", opt.udp_enabled ? "yes" : "no");
 
 		tox = new Tox(opt, null);
 		/* Register the callbacks */
@@ -714,11 +741,16 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 
 	void run () {
-		/* Bootstrap from the node defined above */
-		int err;
-		var bootstrap_pub_key = hex_string_to_bin(BOOTSTRAP_KEY);
-		tox.bootstrap(BOOTSTRAP_ADDRESS, BOOTSTRAP_PORT, bootstrap_pub_key, out err);
-		print("bootstrap %d\n", err);
+		/* Bootstrap from the nodes defined above */
+		int udp_err, tcp_err;
+		for(int i=0; i<nodes.length; i++) {
+			udp_err = tcp_err = -1;
+			var bootstrap_pub_key = hex_string_to_bin(nodes[i].key);
+			tox.bootstrap(nodes[i].address, nodes[i].port, bootstrap_pub_key, out udp_err);
+			// If TCP relays are to be used, explicitly tell the core to initialize a few
+			if(!enable_udp && i<10) tox.add_tcp_relay(nodes[i].address, nodes[i].port, bootstrap_pub_key, out tcp_err);
+			print("bootstrap %s:%d (status: %d UDP, %d TCP)\n", nodes[i].address, nodes[i].port, udp_err, tcp_err);
+		}
 		//...
 
 		SourceFunc tox_iterate = null;
@@ -726,9 +758,9 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			// will call the callback functions defined and registered
 			tox.iterate();
 
-			if (keep_connecting)
+			if (keep_connecting) {
 				Timeout.add (tox.iteration_interval, tox_iterate);
-			else {
+			} else {
 				print("unregistering connection\n");
 				foreach (var id in obj_ids) {
 					dbusconn.unregister_object(id);
