@@ -40,3 +40,11 @@ public interface Telepathy.MessagesChannel : Channel {
 	public abstract HashTable<string, Variant>[,] pending_messages { owned get; }
 	public abstract uint delivery_reporting_support { owned get; }
 }
+
+public enum Telepathy.ChannelChatState { GONE, INACTIVE, ACTIVE, PAUSED, COMPOSING }
+
+[DBus (name = "org.freedesktop.Telepathy.Channel.Interface.ChatState")]
+public interface Telepathy.ChatStateChannel: Channel {
+	public abstract void set_chat_state (uint state) throws IOError;
+	public signal void chat_state_changed (uint contact, uint state);
+}
