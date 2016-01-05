@@ -95,7 +95,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		opt.savedata_type = Tox.SavedataType.TOX_SAVE;
 		opt.savedata = savedata;
 		opt.udp_enabled = enable_udp;
-		print("Enable UDP: %s\n", opt.udp_enabled ? "yes" : "no");
+		print("Enable UDP: %s - TCP port: %d\n", opt.udp_enabled ? "yes" : "no", opt.tcp_port);
 
 		tox = new Tox(opt, null);
 		/* Register the callbacks */
