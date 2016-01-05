@@ -1,7 +1,7 @@
 using Telepathy;
 using Util;
 
-public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Telepathy.MessagesChannel {
+public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Telepathy.MessagesChannel, Telepathy.ChatStateChannel {
 	unowned Tox tox;
 	uint32 friend_number;
 
@@ -59,6 +59,7 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 			conn.register_object<Telepathy.Channel> (objpath, this),
 			conn.register_object<Telepathy.TextChannel> (objpath, this),
 			conn.register_object<Telepathy.MessagesChannel> (objpath, this),
+			conn.register_object<Telepathy.ChatStateChannel> (objpath, this),
 		};
 
 		return objpath;
@@ -73,7 +74,10 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 	}
 
 	public string channel_type { owned get { return "org.freedesktop.Telepathy.Channel.Type.Text"; } }
-	public string[] interfaces { owned get { return {"org.freedesktop.Telepathy.Channel.Interface.Messages"}; } }
+	public string[] interfaces { owned get { return {
+		"org.freedesktop.Telepathy.Channel.Interface.Messages",
+		"org.freedesktop.Telepathy.Channel.Interface.ChatState"
+	}; } }
 	uint _target_handle;
 	public uint target_handle { get { return _target_handle; } }
 	string _target_id;
@@ -197,4 +201,12 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 	}
 	public uint delivery_reporting_support { owned get { return 0; } }
 
+	public void set_chat_state (uint state) {
+		int err;
+		if (state == Telepathy.ChannelChatState.COMPOSING)
+			tox.self_set_typing(friend_number, true, out err);
+		else
+			tox.self_set_typing(friend_number, false, out err);
+		print("typing state changed: %ud\n", state);
+	}
 }
