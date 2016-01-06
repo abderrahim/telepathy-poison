@@ -9,8 +9,6 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 		this.tox = tox;
 		this.friend_number = friend_number;
 
-		tox.callback_friend_typing(friend_typing_callback);
-
 		_target_handle_type = HandleType.CONTACT;
 		_target_handle = friend_number + 1;
 		_target_id = bin_string_to_hex (tox.friend_get_public_key (friend_number, null));
@@ -213,14 +211,14 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 		debug("local typing state changed: contact %ud %ud\n", friend_number, state);
 	}
 
-	private void friend_typing_callback (Tox tox, uint32 friend_number, bool is_typing) {
+	public void friend_typing_callback (Tox tox, uint32 friend_number, bool is_typing) {
 		uint state;
 		if (is_typing)
 			state = Telepathy.ChannelChatState.COMPOSING;
 		else
 			state = Telepathy.ChannelChatState.INACTIVE;
 
-		chat_state_changed(friend_number, state);
+		chat_state_changed(target_handle, state);
 
 		debug("remote typing state changed: contact %ud %ud\n", friend_number, state);
 	}

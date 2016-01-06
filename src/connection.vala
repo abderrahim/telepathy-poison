@@ -35,6 +35,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public bool enable_udp { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
+	bool channels_initialized;
 	Tox tox;
 
     unowned SourceFunc callback;
@@ -292,6 +293,12 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	async TextChannel create_text_channel (uint32 friend_number, bool requested = true) /*requires (!(friend_number in chans))*/ {
 		var chan = new TextChannel (tox, friend_number, requested);
 		chans[friend_number] = chan;
+
+		if (!channels_initialized) {
+			// Register callback for typing notifications, which must only be done once
+			tox.callback_friend_typing(chan.friend_typing_callback);
+			channels_initialized = true;
+		}
 
 		yield chan.register (dbusconn, objpath);
 
