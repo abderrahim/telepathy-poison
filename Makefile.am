@@ -31,6 +31,9 @@ data/org.freedesktop.Telepathy.ConnectionManager.poison.service: Makefile
                      echo 'Exec=${bindir}/telepathy-poison') > $@.tmp && \
                     mv $@.tmp $@
 
+icondir= $(datadir)/icons/hicolor/scalable/apps/
+icon_DATA = data/im-tox.svg
+
 
 EXTRA_DIST = \
 	COPYING
