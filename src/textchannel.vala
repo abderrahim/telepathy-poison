@@ -207,6 +207,7 @@ public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Tel
 			tox.self_set_typing(friend_number, true, out err);
 		else
 			tox.self_set_typing(friend_number, false, out err);
-		print("typing state changed: %ud\n", state);
+
+		debug("local typing state changed: contact %u %u\n", friend_number, state);
 	}
 }

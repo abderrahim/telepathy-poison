@@ -111,6 +111,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		tox.callback_friend_status_message(friend_status_message_callback);
 		tox.callback_friend_connection_status(friend_connection_status_callback);
 
+		tox.callback_friend_typing(friend_typing_callback);
+
 		var address = tox.self_get_address();
 
 		var hex_address = bin_string_to_hex(address);
@@ -733,6 +735,26 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 	}
 	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
+
+
+	void friend_typing_callback (Tox tox, uint32 friend_number, bool is_typing) {
+		var channel = chans[friend_number];
+
+		if (channel == null) {
+			debug("no channel for friend number %u", friend_number);
+			return;
+		}
+
+		uint state;
+		if (is_typing)
+			state = Telepathy.ChannelChatState.COMPOSING;
+		else
+			state = Telepathy.ChannelChatState.INACTIVE;
+
+		channel.chat_state_changed(channel.target_handle, state);
+
+		debug("remote typing state changed: contact %u %u\n", friend_number, state);
+	}
 
 	void save_tox_data () {
 		var savedata = tox.get_savedata();
