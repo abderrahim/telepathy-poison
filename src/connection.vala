@@ -192,7 +192,10 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	uint next_handle = uint.MAX - 1;
 	HashTable<uint, string> handles = new HashTable<uint, string> (direct_hash, direct_equal);
 	public uint[] request_handles (uint handle_type, string[] identifiers) throws Telepathy.Error {
-		return_val_if_fail (handle_type == HandleType.CONTACT, new uint[0]);
+		debug ("request handles type %u %s", handle_type, string.joinv(";", identifiers));
+
+		if (handle_type != HandleType.CONTACT)
+			throw new Telepathy.Error.NOT_IMPLEMENTED("only supports contact handles");
 
 		var res = new uint[identifiers.length];
 		for (var i = 0; i < identifiers.length; i++) {
