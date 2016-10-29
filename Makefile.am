@@ -5,6 +5,7 @@ bin_PROGRAMS = telepathy-poison
 
 telepathy_poison_SOURCES = \
 	src/telepathy/connectionmanager.vala	\
+	src/telepathy/errors.vala	\
 	src/telepathy/protocol.vala	\
 	src/telepathy/connection.vala	\
 	src/telepathy/channel.vala	\

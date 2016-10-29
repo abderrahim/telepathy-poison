@@ -1,7 +1,7 @@
 [DBus (name = "org.freedesktop.Telepathy.Channel")]
 public interface Telepathy.Channel : Object {
 	public string[] get_interfaces_ () { return interfaces; }
-	public abstract void close () throws IOError;
+	public abstract void close () throws IOError, Telepathy.Error;
 
 	public signal void closed ();
 
@@ -23,12 +23,12 @@ public enum Telepathy.MessageType { NORMAL, ACTION, NOTICE, AUTO_REPLY, DELIVERY
 
 [DBus (name = "org.freedesktop.Telepathy.Channel.Type.Text")]
 public interface Telepathy.TextChannel : Channel {
-	public abstract void acknowledge_pending_messages (uint[] ids) throws IOError;
+	public abstract void acknowledge_pending_messages (uint[] ids) throws IOError, Telepathy.Error;
 }
 
 [DBus (name = "org.freedesktop.Telepathy.Channel.Interface.Messages")]
 public interface Telepathy.MessagesChannel : Channel {
-	public abstract string send_message (HashTable<string, Variant>[] message, uint flags) throws IOError;
+	public abstract string send_message (HashTable<string, Variant>[] message, uint flags) throws IOError, Telepathy.Error;
 
 	public signal void message_sent (HashTable<string, Variant>[] content, uint flags, string message_token);
 	public signal void pending_messages_removed (uint[] message_ids);
@@ -45,6 +45,6 @@ public enum Telepathy.ChannelChatState { GONE, INACTIVE, ACTIVE, PAUSED, COMPOSI
 
 [DBus (name = "org.freedesktop.Telepathy.Channel.Interface.ChatState")]
 public interface Telepathy.ChatStateChannel: Channel {
-	public abstract void set_chat_state (uint state) throws IOError;
+	public abstract void set_chat_state (uint state) throws IOError, Telepathy.Error;
 	public signal void chat_state_changed (uint contact, uint state);
 }

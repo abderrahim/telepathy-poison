@@ -1,7 +1,7 @@
 [DBus (name = "org.freedesktop.Telepathy.Protocol")]
 public interface Telepathy.Protocol : Object {
-	public abstract string identify_account (HashTable<string, Variant> parameters) throws IOError;
-	public abstract string normalize_contact (string contact_id) throws IOError;
+	public abstract string identify_account (HashTable<string, Variant> parameters) throws IOError, Telepathy.Error;
+	public abstract string normalize_contact (string contact_id) throws IOError, Telepathy.Error;
 
 	public abstract string[] interfaces { owned get; }
 	public abstract ParamSpec[] parameters { owned get; }

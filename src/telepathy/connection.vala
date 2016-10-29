@@ -5,8 +5,8 @@ public enum Telepathy.ConnectionStatusReason {NONE, REQUESTED, NETWORK_ERROR}
 
 [DBus (name = "org.freedesktop.Telepathy.Connection")]
 public interface Telepathy.Connection : Object {
-	public abstract void connect () throws IOError;
-	public abstract void disconnect () throws IOError;
+	public abstract void connect () throws IOError, Telepathy.Error;
+	public abstract void disconnect () throws IOError, Telepathy.Error;
 
 	public string[] get_interfaces_ () {
 		return interfaces;
@@ -17,10 +17,10 @@ public interface Telepathy.Connection : Object {
 		return status;
 	}
 
-	public abstract void hold_handles (uint handle_type, uint[] handles) throws IOError;
+	public abstract void hold_handles (uint handle_type, uint[] handles) throws IOError, Telepathy.Error;
 	// TODO: InspectHandles
-	public abstract void release_handles (uint handle_type, uint[] handles) throws IOError;
-	public abstract uint[] request_handles (uint handle_type, string[] identifiers) throws IOError;
+	public abstract void release_handles (uint handle_type, uint[] handles) throws IOError, Telepathy.Error;
+	public abstract uint[] request_handles (uint handle_type, string[] identifiers) throws IOError, Telepathy.Error;
 
 	public void add_client_interest (string[] tokens) {}
 	public void remove_client_interest (string[] tokens) {}
@@ -58,11 +58,11 @@ public struct Telepathy.ChannelDetails {
 public interface Telepathy.ConnectionRequests : Object, Connection {
 	public abstract void create_channel (HashTable<string, Variant> request,
 										 out ObjectPath channel,
-										 out HashTable<string, Variant> properties) throws IOError;
+										 out HashTable<string, Variant> properties) throws IOError, Telepathy.Error;
 	public abstract async void ensure_channel (HashTable<string, Variant> request,
 										 out bool yours,
 										 out ObjectPath channel,
-										 out HashTable<string, Variant> properties) throws IOError;
+										 out HashTable<string, Variant> properties) throws IOError, Telepathy.Error;
 
 	public signal void new_channels (ChannelDetails[] channels);
 	public signal void channel_closed (ObjectPath removed);
@@ -76,10 +76,10 @@ public interface Telepathy.ConnectionContacts : Object, Connection {
 	public abstract string[] contact_attribute_interfaces { owned get; }
 
 	public abstract void get_contact_attributes (uint[] handles, string[] interfaces, bool hold,
-												 out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError;
+												 out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError, Telepathy.Error;
 	[DBus (name = "GetContactByID")]
 	public abstract void get_contact_by_id (string identifier, string[] interfaces, out uint handle,
-											out HashTable<string, Variant> attrs) throws IOError;
+											out HashTable<string, Variant> attrs) throws IOError, Telepathy.Error;
 }
 
 public enum Telepathy.ContactListState { NONE, WAITING, FAILURE, SUCCESS }
@@ -98,14 +98,14 @@ public struct Telepathy.ContactSubscriptions {
 
 [DBus (name = "org.freedesktop.Telepathy.Connection.Interface.ContactList")]
 public interface Telepathy.ConnectionContactList : Object, Connection {
-	public abstract void get_contact_list_attributes(string[] interfaces, bool hold, out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError;
+	public abstract void get_contact_list_attributes(string[] interfaces, bool hold, out HashTable<uint, HashTable<string, Variant>> attrs) throws IOError, Telepathy.Error;
 
-	public abstract void request_subscription (uint[] contacts, string message) throws IOError;
-	public abstract void authorize_publication (uint[] contacts) throws IOError;
-	public abstract void remove_contacts (uint[] contacts) throws IOError;
-	public abstract void unsubscribe (uint[] contacts) throws IOError;
-	public abstract void unpublish (uint[] contacts) throws IOError;
-	public abstract void download () throws IOError;
+	public abstract void request_subscription (uint[] contacts, string message) throws IOError, Telepathy.Error;
+	public abstract void authorize_publication (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract void remove_contacts (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract void unsubscribe (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract void unpublish (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract void download () throws IOError, Telepathy.Error;
 
 	public signal void contact_list_state_changed (uint contact_list_state);
 	[DBus (name = "ContactsChangedWithID")]
@@ -132,10 +132,10 @@ public struct Telepathy.AliasPair {
 }
 [DBus (name = "org.freedesktop.Telepathy.Connection.Interface.Aliasing")]
 public interface Telepathy.ConnectionAliasing : Object, Connection {
-	public abstract uint get_alias_flags () throws IOError;
-	public abstract string[] request_aliases (uint[] contacts) throws IOError;
-	public abstract HashTable<uint, string> get_aliases (uint[] contacts) throws IOError;
-	public abstract void set_aliases (HashTable<uint, string> aliases) throws IOError;
+	public abstract uint get_alias_flags () throws IOError, Telepathy.Error;
+	public abstract string[] request_aliases (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract HashTable<uint, string> get_aliases (uint[] contacts) throws IOError, Telepathy.Error;
+	public abstract void set_aliases (HashTable<uint, string> aliases) throws IOError, Telepathy.Error;
 
 	public signal void aliases_changed (AliasPair[] aliases);
 	public const string CONTACT_ALIAS = "org.freedesktop.Telepathy.Connection.Interface.Aliasing/alias";
@@ -165,8 +165,8 @@ public struct Telepathy.SimpleStatusSpec {
 
 [DBus (name = "org.freedesktop.Telepathy.Connection.Interface.SimplePresence")]
 public interface Telepathy.ConnectionSimplePresence : Object, Connection {
-	public abstract void set_presence (string status, string status_message) throws IOError;
-	public abstract HashTable<uint, SimplePresence?> get_presences (uint[] contacts) throws IOError;
+	public abstract void set_presence (string status, string status_message) throws IOError, Telepathy.Error;
+	public abstract HashTable<uint, SimplePresence?> get_presences (uint[] contacts) throws IOError, Telepathy.Error;
 
 	public signal void presences_changed (HashTable<uint, SimplePresence?> presence);
 

@@ -21,9 +21,9 @@ public interface Telepathy.ConnectionManager : Object {
 	public abstract HashTable<string, HashTable<string, Variant>> protocols { owned get; }
 	public abstract string[] interfaces { owned get; }
 
-	public abstract string[] list_protocols () throws IOError;
-	public abstract ParamSpec[] get_parameters (string protocol) throws IOError;
-	public abstract async void request_connection (string protocol, HashTable<string, Variant> parameters, out string busname, out ObjectPath objpath) throws IOError;
+	public abstract string[] list_protocols () throws IOError, Telepathy.Error;
+	public abstract ParamSpec[] get_parameters (string protocol) throws IOError, Telepathy.Error;
+	public abstract async void request_connection (string protocol, HashTable<string, Variant> parameters, out string busname, out ObjectPath objpath) throws IOError, Telepathy.Error;
 
 	public signal void new_connection (string busname, ObjectPath objpath, string protocol);
 }
