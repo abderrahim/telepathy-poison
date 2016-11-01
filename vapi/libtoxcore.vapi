@@ -1,6 +1,6 @@
 [CCode (cname = "Tox", free_function = "tox_kill", cheader_filename="tox/tox.h")]
 [Compact]
-public class Tox {
+public class Tox<T> {
 	public const int ADDRESS_SIZE;
 	public const int PUBLIC_KEY_SIZE;
 	public const int SECRET_KEY_SIZE;
@@ -57,12 +57,12 @@ public class Tox {
 	[CCode (cname = "TOX_CONNECTION")]
 	public enum Connection { NONE, TCP, UDP }
 	public Connection self_get_connection_status ();
-	[CCode (cname = "tox_self_connection_status_cb")]
-	public delegate void SelfConnectionStatusCb (Tox tox, Connection connection_status);
-	public void callback_self_connection_status (SelfConnectionStatusCb callback);
+	[CCode (cname = "tox_self_connection_status_cb", has_target=false)]
+	public delegate void SelfConnectionStatusCb<T> (Tox<T> tox, Connection connection_status, T? user_data);
+	public void callback_self_connection_status (SelfConnectionStatusCb<T> callback);
 
 	public uint32 iteration_interval { [CCode (cname = "tox_iteration_interval")] get; }
-	public void iterate ();
+	public void iterate (T? user_data);
 
 	// Internal client information
 	[CCode (cname = "tox_self_get_address")]
@@ -181,9 +181,9 @@ public class Tox {
 	}
 
 
-	[CCode (cname = "tox_friend_name_cb")]
-	public delegate void FriendNameCb (Tox tox, uint32 friend_number, uint8[] name);
-	public void callback_friend_name(FriendNameCb callback);
+	[CCode (cname = "tox_friend_name_cb", has_target = false)]
+	public delegate void FriendNameCb<T> (Tox<T> tox, uint32 friend_number, uint8[] name, T? user_data);
+	public void callback_friend_name(FriendNameCb<T> callback);
 
 	public size_t friend_get_status_message_size(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
 	[CCode (cname = "tox_friend_get_status_message")]
@@ -202,39 +202,40 @@ public class Tox {
 		return result;
 	}
 
-	public delegate void FriendStatusMessageCb(Tox tox, uint32 friend_number, uint8[] message);
-	public void callback_friend_status_message(FriendStatusMessageCb callback);
+	[CCode (cname = "tox_friend_status_message_cb", has_target = false)]
+	public delegate void FriendStatusMessageCb<T> (Tox<T> tox, uint32 friend_number, uint8[] message, T user_data);
+	public void callback_friend_status_message(FriendStatusMessageCb<T> callback);
 
 	public UserStatus friend_get_status(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
-	[CCode (cname = "tox_friend_status_cb")]
-	public delegate void FriendStatusCb(Tox tox, uint32 friend_number, UserStatus status);
-	public void callback_friend_status(FriendStatusCb callback);
+	[CCode (cname = "tox_friend_status_cb", has_target = false)]
+	public delegate void FriendStatusCb<T> (Tox<T> tox, uint32 friend_number, UserStatus status, T user_data);
+	public void callback_friend_status(FriendStatusCb<T> callback);
 
 	public Connection friend_get_connection_status(uint32 friend_number, out int /*TOX_ERR_FRIEND_QUERY **/error);
-	[CCode (cname = "tox_friend_connection_status_cb")]
-	public delegate void FriendConnectionStatusCb(Tox tox, uint32 friend_number, Connection connection_status);
-	public void callback_friend_connection_status(FriendConnectionStatusCb callback);
+	[CCode (cname = "tox_friend_connection_status_cb", has_target = false)]
+	public delegate void FriendConnectionStatusCb<T> (Tox<T> tox, uint32 friend_number, Connection connection_status, T user_data);
+	public void callback_friend_connection_status(FriendConnectionStatusCb<T> callback);
 
 	public bool friend_get_typing(uint32 friend_number, out int/*TOX_ERR_FRIEND_QUERY **/error);
-	[CCode (cname = "tox_friend_typing_cb")]
-	public delegate void FriendTypingCb(Tox tox, uint32 friend_number, bool is_typing);
-	public void callback_friend_typing(FriendTypingCb callback);
+	[CCode (cname = "tox_friend_typing_cb", has_target = false)]
+	public delegate void FriendTypingCb<T> (Tox<T> tox, uint32 friend_number, bool is_typing, T user_data);
+	public void callback_friend_typing(FriendTypingCb<T> callback);
 
 	// Sending private messages
 	public bool self_set_typing(uint32 friend_number, bool typing, out int /*TOX_ERR_SET_TYPING **/error);
 	public uint32 friend_send_message(uint32 friend_number, int /*TOX_MESSAGE_TYPE*/ type, uint8[] message, out int /*TOX_ERR_FRIEND_SEND_MESSAGE **/error);
-	[CCode (cname = "tox_friend_read_receipt_cb")]
-	public delegate void FriendReadReceiptCb(Tox tox, uint32 friend_number, uint32 message_id);
-	public void callback_friend_read_receipt(FriendReadReceiptCb callback);
+	[CCode (cname = "tox_friend_read_receipt_cb", has_target = false)]
+	public delegate void FriendReadReceiptCb<T> (Tox<T> tox, uint32 friend_number, uint32 message_id, T user_data);
+	public void callback_friend_read_receipt(FriendReadReceiptCb<T> callback);
 
 	// Receiving private messages and friend requests
-	[CCode (cname = "tox_friend_request_cb")]
-	public delegate void FriendRequestCb(Tox tox, [CCode (array_length=false, array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key, uint8[] message);
-	public void callback_friend_request(FriendRequestCb callback);
+	[CCode (cname = "tox_friend_request_cb", has_target = false)]
+	public delegate void FriendRequestCb<T> (Tox<T> tox, [CCode (array_length=false, array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key, uint8[] message, T user_data);
+	public void callback_friend_request(FriendRequestCb<T> callback);
 
-	[CCode (cname = "tox_friend_message_cb")]
-	public delegate void FriendMessageCb(Tox tox, uint32 friend_number, int /*TOX_MESSAGE_TYPE*/ type, uint8[] message);
-	public void callback_friend_message(FriendMessageCb callback);
+	[CCode (cname = "tox_friend_message_cb", has_target = false)]
+	public delegate void FriendMessageCb<T> (Tox<T> tox, uint32 friend_number, int /*TOX_MESSAGE_TYPE*/ type, uint8[] message, T? user_data);
+	public void callback_friend_message(FriendMessageCb<T> callback);
 
 	//
 }

@@ -35,7 +35,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public bool enable_udp { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
-	Tox tox;
+	Tox<Connection> tox;
 
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
@@ -97,21 +97,37 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		opt.udp_enabled = enable_udp;
 		print("Enable UDP: %s - TCP port: %d\n", opt.udp_enabled ? "yes" : "no", opt.tcp_port);
 
-		tox = new Tox(opt, null);
+		tox = new Tox<Connection> (opt, null);
 		/* Register the callbacks */
-		tox.callback_self_connection_status(self_connection_status_callback);
+		tox.callback_self_connection_status (
+			(tox, conn, self) => self.self_connection_status_callback (tox, conn));
 
-		tox.callback_friend_message(friend_message_callback);
+		tox.callback_friend_message (
+			(tox, friend_number, type, message, self) =>
+			self.friend_message_callback (tox, friend_number, type, message));
 
-		tox.callback_friend_request(friend_request_callback);
+		tox.callback_friend_request (
+			(tox, public_key, message, self) =>
+			self.friend_request_callback (tox, public_key, message));
 
-		tox.callback_friend_name (friend_name_callback);
+		tox.callback_friend_name (
+			(tox, friend_number, name, self) =>
+			self.friend_name_callback (tox, friend_number, name));
 
-		tox.callback_friend_status(friend_status_callback);
-		tox.callback_friend_status_message(friend_status_message_callback);
-		tox.callback_friend_connection_status(friend_connection_status_callback);
+		tox.callback_friend_status (
+			(tox, friend_number, status, self) =>
+			self.friend_status_callback (tox, friend_number, status));
 
-		tox.callback_friend_typing(friend_typing_callback);
+		tox.callback_friend_status_message (
+			(tox, friend_number, message, self) =>
+			self.friend_status_message_callback (tox, friend_number, message));
+
+		tox.callback_friend_connection_status (
+			(tox, friend_number, conn, self) => self.friend_connection_status_callback (tox,friend_number, conn));
+
+		tox.callback_friend_typing (
+			(tox, friend_number, is_typing, self) =>
+			self.friend_typing_callback (tox, friend_number, is_typing));
 
 		var address = tox.self_get_address();
 
@@ -125,7 +141,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		run ();
 	}
 
-	void friend_message_callback(Tox tox, uint32 friend_number,
+	void friend_message_callback(Tox<Connection> tox, uint32 friend_number,
 								 int /*TOX_MESSAGE_TYPE*/ type, uint8[] message) {
 		friend_message_callback_async.begin (friend_number, type, message);
 	}
@@ -142,7 +158,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		chan.receive_message (type, message);
 	}
 
-	void self_connection_status_callback(Tox tox, Tox.Connection conn) {
+	void self_connection_status_callback(Tox<Connection> tox, Tox.Connection conn) {
 		print("connection status %d\n", conn);
 		if(conn == Tox.Connection.NONE) {
 			_status = ConnectionStatus.CONNECTING;
@@ -500,7 +516,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 	public void download () {}
 
-	void friend_request_callback(Tox tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
+	void friend_request_callback(Tox<Connection> tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
 								 uint8[] message) {
 		print("friend_request_callback\n");
 		print("friend request from %s: %s\n",
@@ -561,7 +577,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 	}
 
-	void friend_name_callback (Tox tox, uint32 friend_number, uint8[] name) {
+	void friend_name_callback (Tox<Connection> tox, uint32 friend_number, uint8[] name) {
 		var handle = friend_number + 1;
 		var changed = new AliasPair[] { AliasPair(handle, buffer_to_string (name)) };
 		aliases_changed (changed);
@@ -643,7 +659,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		return res;
 	}
 
-	void friend_status_callback (Tox tox, uint32 friend_number, Tox.UserStatus status) {
+	void friend_status_callback (Tox<Connection> tox, uint32 friend_number, Tox.UserStatus status) {
 		debug("friend_status_callback %u", friend_number);
 		uint presence_type;
 		switch (status) {
@@ -668,7 +684,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		presences_changed (presences);
 	}
 
-	void friend_status_message_callback (Tox tox, uint32 friend_number, uint8[] message) {
+	void friend_status_message_callback (Tox<Connection> tox, uint32 friend_number, uint8[] message) {
 		debug("friend_status_message_callback %u", friend_number);
 		uint presence_type;
 		switch (tox.friend_get_status (friend_number, null)) {
@@ -692,7 +708,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		presences_changed (presences);
 	}
 
-	void friend_connection_status_callback (Tox tox, uint32 friend_number, Tox.Connection connection_status) {
+	void friend_connection_status_callback (Tox<Connection> tox, uint32 friend_number, Tox.Connection connection_status) {
 		debug("friend_connection_status_callback %u", friend_number);
 		var handle = friend_number + 1;
 		if (handle in sent_requests)
@@ -740,7 +756,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
 
 
-	void friend_typing_callback (Tox tox, uint32 friend_number, bool is_typing) {
+	void friend_typing_callback (Tox<Connection> tox, uint32 friend_number, bool is_typing) {
 		var channel = chans[friend_number];
 
 		if (channel == null) {
@@ -781,7 +797,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		SourceFunc tox_iterate = null;
 		tox_iterate = () => {
 			// will call the callback functions defined and registered
-			tox.iterate();
+			tox.iterate (this);
 
 			if (keep_connecting) {
 				Timeout.add (tox.iteration_interval, tox_iterate);
