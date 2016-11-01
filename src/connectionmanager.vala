@@ -31,17 +31,25 @@ public class ConnectionManager : Object, Telepathy.ConnectionManager {
 		return proto.parameters;
 	}
 
-	public async void request_connection (string protocol, HashTable<string, Variant> parameters, out string busname, out ObjectPath objpath) requires (protocol == "tox") {
+	internal HashTable<string, Connection> connections = new HashTable<string, Connection> (str_hash, str_equal);
+
+	public async void request_connection (string protocol, HashTable<string, Variant> parameters, out string busname, out ObjectPath objpath) throws Telepathy.Error {
 		debug("request connection %s %s", protocol, (string) parameters["profile"]);
+
+		if (protocol != "tox")
+			throw new Telepathy.Error.NOT_IMPLEMENTED ("telepathy-poison only supports the Tox protocol.");
 
 		var profile = (string) parameters["profile"];
 		var password = ("password" in parameters) ? (string) parameters["password"] : null;
 		var create = ("create profile" in parameters) ? (bool) parameters["create profile"] : false;
 		var enable_udp = ("enable UDP" in parameters) ? (bool) parameters["enable UDP"] : true;
 
+		if (profile in connections)
+			throw new Telepathy.Error.NOT_AVAILABLE ("There is already a connection using this profile.");
+
 		var conn = new Connection (this, profile, password, create, enable_udp, request_connection.callback);
+		connections[profile] = conn;
 		yield;
-		print("cont\n");
 
 		busname = conn.busname;
 		objpath = conn.objpath;

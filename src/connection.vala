@@ -795,6 +795,8 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 				Bus.unown_name (name_id);
 				name_id = 0;
 
+				cm.connections.remove (profile);
+
 				save_tox_data ();
 
 				tox = null;
