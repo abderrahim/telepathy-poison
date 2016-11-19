@@ -2,10 +2,10 @@ using Telepathy;
 using Util;
 
 public class TextChannel : Object, Telepathy.Channel, Telepathy.TextChannel, Telepathy.MessagesChannel, Telepathy.ChatStateChannel {
-	unowned Tox tox;
+	unowned Tox.Instance tox;
 	uint32 friend_number;
 
-	public TextChannel (Tox tox, uint32 friend_number, bool requested) {
+	public TextChannel (Tox.Instance tox, uint32 friend_number, bool requested) {
 		this.tox = tox;
 		this.friend_number = friend_number;
 

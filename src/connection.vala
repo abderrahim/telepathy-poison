@@ -35,7 +35,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public bool enable_udp { private get; construct; }
 	string profile_filename;
 	bool keep_connecting = true;
-	Tox tox;
+	Tox.Instance tox;
 
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
@@ -97,7 +97,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		opt.udp_enabled = enable_udp;
 		print("Enable UDP: %s - TCP port: %d\n", opt.udp_enabled ? "yes" : "no", opt.tcp_port);
 
-		tox = new Tox(opt, null);
+		tox = new Tox.Instance(opt, null);
 		/* Register the callbacks */
 		tox.callback_self_connection_status(self_connection_status_callback);
 
@@ -125,7 +125,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		run ();
 	}
 
-	void friend_message_callback(Tox tox, uint32 friend_number,
+	void friend_message_callback(Tox.Instance tox, uint32 friend_number,
 								 int /*TOX_MESSAGE_TYPE*/ type, uint8[] message) {
 		friend_message_callback_async.begin (friend_number, type, message);
 	}
@@ -142,7 +142,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		chan.receive_message (type, message);
 	}
 
-	void self_connection_status_callback(Tox tox, Tox.Connection conn) {
+	void self_connection_status_callback(Tox.Instance tox, Tox.Connection conn) {
 		print("connection status %d\n", conn);
 		if(conn == Tox.Connection.NONE) {
 			_status = ConnectionStatus.CONNECTING;
@@ -500,7 +500,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	}
 	public void download () {}
 
-	void friend_request_callback(Tox tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
+	void friend_request_callback(Tox.Instance tox, [CCode (array_length_cexpr = "TOX_PUBLIC_KEY_SIZE")] uint8[] public_key,
 								 uint8[] message) {
 		print("friend_request_callback\n");
 		print("friend request from %s: %s\n",
@@ -561,7 +561,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		}
 	}
 
-	void friend_name_callback (Tox tox, uint32 friend_number, uint8[] name) {
+	void friend_name_callback (Tox.Instance tox, uint32 friend_number, uint8[] name) {
 		var handle = friend_number + 1;
 		var changed = new AliasPair[] { AliasPair(handle, buffer_to_string (name)) };
 		aliases_changed (changed);
@@ -643,7 +643,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		return res;
 	}
 
-	void friend_status_callback (Tox tox, uint32 friend_number, Tox.UserStatus status) {
+	void friend_status_callback (Tox.Instance tox, uint32 friend_number, Tox.UserStatus status) {
 		debug("friend_status_callback %u", friend_number);
 		uint presence_type;
 		switch (status) {
@@ -668,7 +668,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		presences_changed (presences);
 	}
 
-	void friend_status_message_callback (Tox tox, uint32 friend_number, uint8[] message) {
+	void friend_status_message_callback (Tox.Instance tox, uint32 friend_number, uint8[] message) {
 		debug("friend_status_message_callback %u", friend_number);
 		uint presence_type;
 		switch (tox.friend_get_status (friend_number, null)) {
@@ -692,7 +692,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		presences_changed (presences);
 	}
 
-	void friend_connection_status_callback (Tox tox, uint32 friend_number, Tox.Connection connection_status) {
+	void friend_connection_status_callback (Tox.Instance tox, uint32 friend_number, Tox.Connection connection_status) {
 		debug("friend_connection_status_callback %u", friend_number);
 		var handle = friend_number + 1;
 		if (handle in sent_requests)
@@ -740,7 +740,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public uint maximum_status_message_length { get { return Tox.MAX_STATUS_MESSAGE_LENGTH; } }
 
 
-	void friend_typing_callback (Tox tox, uint32 friend_number, bool is_typing) {
+	void friend_typing_callback (Tox.Instance tox, uint32 friend_number, bool is_typing) {
 		var channel = chans[friend_number];
 
 		if (channel == null) {
