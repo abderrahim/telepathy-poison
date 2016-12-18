@@ -33,15 +33,22 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	public string profile { private get; construct; }
 	public ConnectionManager cm { private get; construct; }
 	public bool enable_udp { private get; construct; }
+	public string password { private get; construct; }
+
 	string profile_filename;
-	bool keep_connecting = true;
+	bool profile_encrypted;
+	uint8[] savedata;
+	uint8[] encryption_password;
+	PasswordChannel passwordchannel = null;
+
+	bool keep_connecting = false;
 	Tox.Instance tox;
 
     unowned SourceFunc callback;
 	DBusConnection dbusconn;
 
 	public Connection (ConnectionManager cm, string profile, string? password, bool create, bool enable_udp, SourceFunc callback) {
-		Object (cm: cm, profile: profile, enable_udp: enable_udp);
+		Object (cm: cm, profile: profile, enable_udp: enable_udp, password: password);
 		this.callback = callback;
 	}
 
@@ -87,42 +94,6 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 		var config_dir = Environment.get_user_config_dir();
 		profile_filename = Path.build_filename(config_dir, "tox", profile + ".tox");
-		uint8[] savedata;
-		FileUtils.get_data(profile_filename, out savedata);
-		debug("loaded %s (%d bytes)", profile_filename, savedata.length);
-
-		var opt = new Tox.Options (null);
-		opt.savedata_type = Tox.SavedataType.TOX_SAVE;
-		opt.savedata = savedata;
-		opt.udp_enabled = enable_udp;
-		print("Enable UDP: %s - TCP port: %d\n", opt.udp_enabled ? "yes" : "no", opt.tcp_port);
-
-		tox = new Tox.Instance(opt, null);
-		/* Register the callbacks */
-		tox.callback_self_connection_status(self_connection_status_callback);
-
-		tox.callback_friend_message(friend_message_callback);
-
-		tox.callback_friend_request(friend_request_callback);
-
-		tox.callback_friend_name (friend_name_callback);
-
-		tox.callback_friend_status(friend_status_callback);
-		tox.callback_friend_status_message(friend_status_message_callback);
-		tox.callback_friend_connection_status(friend_connection_status_callback);
-
-		tox.callback_friend_typing(friend_typing_callback);
-
-		var address = tox.self_get_address();
-
-		var hex_address = bin_string_to_hex(address);
-		_self_id = hex_address;
-		self_contact_changed (self_handle, self_id);
-		print("self address %s\n", hex_address);
-
-		contact_list_state_changed (ContactListState.SUCCESS);
-
-		run ();
 	}
 
 	void friend_message_callback(Tox.Instance tox, uint32 friend_number,
@@ -165,10 +136,90 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 		_status = ConnectionStatus.CONNECTING;
 		status_changed (ConnectionStatus.CONNECTING, ConnectionStatusReason.REQUESTED);
+
+		FileUtils.get_data(profile_filename, out savedata);
+		debug("loaded %s (%d bytes) encrypted: %s", profile_filename, savedata.length, Tox.is_data_encrypted (savedata).to_string ());
+
+		if (!Tox.is_data_encrypted (savedata)) {
+			continue_connection ();
+			return;
+		}
+
+		profile_encrypted = true;
+		print("parameter password %s\n", password);
+
+		if (password != null && decrypt_savedata(password.data)) {
+			continue_connection ();
+			return;
+		}
+
+		passwordchannel = new PasswordChannel (this);
+		passwordchannel.register (dbusconn, objpath);
+
+		Idle.add (() => {
+			new_channels ({ChannelDetails (passwordchannel.objpath, passwordchannel.get_properties ()) });
+			return false;
+		});
+
+	}
+
+	internal bool decrypt_savedata (uint8[] password) {
+		uint8[] decrypted_savedata = new uint8[savedata.length - Tox.PASS_ENCRYPTION_EXTRA_LENGTH];
+		int error;
+		if (!Tox.pass_decrypt (savedata, password, decrypted_savedata, out error))
+			return false;
+
+		savedata = decrypted_savedata;
+		encryption_password = password;
+		return true;
+	}
+
+	internal void continue_connection () {
+		var opt = new Tox.Options (null);
+		opt.savedata_type = Tox.SavedataType.TOX_SAVE;
+		opt.savedata = savedata;
+		opt.udp_enabled = enable_udp;
+		print("Enable UDP: %s - TCP port: %d\n", opt.udp_enabled ? "yes" : "no", opt.tcp_port);
+
+		tox = new Tox.Instance(opt, null);
+		if (tox == null) {
+			disconnect ();
+			return;
+		}
+		/* Register the callbacks */
+		tox.callback_self_connection_status(self_connection_status_callback);
+
+		tox.callback_friend_message(friend_message_callback);
+
+		tox.callback_friend_request(friend_request_callback);
+
+		tox.callback_friend_name (friend_name_callback);
+
+		tox.callback_friend_status(friend_status_callback);
+		tox.callback_friend_status_message(friend_status_message_callback);
+		tox.callback_friend_connection_status(friend_connection_status_callback);
+
+		tox.callback_friend_typing(friend_typing_callback);
+
+		var address = tox.self_get_address();
+
+		var hex_address = bin_string_to_hex(address);
+		_self_id = hex_address;
+		self_contact_changed (self_handle, self_id);
+		print("self address %s\n", hex_address);
+
+		contact_list_state_changed (ContactListState.SUCCESS);
+
+		keep_connecting = true;
+		run ();
 	}
 	public new void disconnect () {
 		debug("%s disconnect", profile);
-		keep_connecting = false;
+		if (keep_connecting)
+			keep_connecting = false;
+		else
+			unregister ();
+
 		status_changed (ConnectionStatus.DISCONNECTED, ConnectionStatusReason.REQUESTED);
 	}
 
@@ -522,7 +573,15 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		contacts_changed_with_id (changes, identifiers, new HashTable<uint, string> (direct_hash, direct_equal));
 	}
 
-	public uint contact_list_state { get { return ContactListState.SUCCESS; } }
+	public uint contact_list_state {
+		get {
+			if (tox == null)
+				return ContactListState.WAITING;
+			else
+				return ContactListState.SUCCESS;
+		}
+	}
+
 	public bool contact_list_persists { get { return true; } }
 	public bool can_change_contact_list { get { return true; } }
 	public bool request_uses_message { get { return true; } }
@@ -726,6 +785,9 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 	HashTable<string, SimpleStatusSpec?> _statuses;
 	public HashTable<string, SimpleStatusSpec?> statuses {
 		owned get {
+			if (tox == null)
+				return new HashTable<string, SimpleStatusSpec?> (str_hash, str_equal);
+
 			if (_statuses != null) return _statuses;
 
 			_statuses = new HashTable<string, SimpleStatusSpec?> (str_hash, str_equal);
@@ -761,8 +823,18 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 
 	void save_tox_data () {
 		var savedata = tox.get_savedata();
-		FileUtils.set_data(profile_filename, savedata);
-		print("savedata written\n");
+		if (encryption_password == null) {
+			FileUtils.set_data(profile_filename, savedata);
+			debug ("savedata written to %s", profile_filename);
+			return;
+		}
+
+		var encrypted_savedata = new uint8[savedata.length + Tox.PASS_ENCRYPTION_EXTRA_LENGTH];
+		int error;
+		if (Tox.pass_encrypt(savedata, encryption_password, encrypted_savedata, out error)) {
+			FileUtils.set_data(profile_filename, encrypted_savedata);
+			debug ("encrypted savedata written to %s", profile_filename);
+		}
 	}
 
 	void run () {
@@ -786,17 +858,7 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 			if (keep_connecting) {
 				Timeout.add (tox.iteration_interval, tox_iterate);
 			} else {
-				print("unregistering connection\n");
-				foreach (var id in obj_ids) {
-					dbusconn.unregister_object(id);
-				}
-				obj_ids = {};
-
-				Bus.unown_name (name_id);
-				name_id = 0;
-
-				cm.connections.remove (profile);
-
+				unregister ();
 				save_tox_data ();
 
 				tox = null;
@@ -805,5 +867,18 @@ public class Connection : Object, Telepathy.Connection, Telepathy.ConnectionRequ
 		};
 
 		tox_iterate ();
+	}
+
+	void unregister () {
+		print("unregistering connection\n");
+		foreach (var id in obj_ids) {
+			dbusconn.unregister_object(id);
+		}
+		obj_ids = {};
+
+		Bus.unown_name (name_id);
+		name_id = 0;
+
+		cm.connections.remove (profile);
 	}
 }

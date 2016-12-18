@@ -71,11 +71,21 @@ public interface Telepathy.SASLAuthenticationChannel: Channel {
 	public abstract string[] available_mechanisms { owned get; }
 	public abstract bool has_initial_data { owned get; }
 	public abstract bool can_try_again { owned get; }
-	public abstract uint sasl_status { owned get; }
+	public abstract SASLStatus sasl_status { owned get; }
 	public abstract string sasl_error { owned get; }
 	public abstract HashTable<string, Variant> sasl_error_details { owned get; }
 	public abstract string authorization_identity { owned get; }
 	public abstract string default_username { owned get; }
 	public abstract string default_realm { owned get; }
 	public abstract bool may_save_response { owned get; }
+}
+
+public enum Telepathy.SASLStatus {
+	NOT_STARTED,
+	IN_PROGRESS,
+	SERVER_SUCCEEDED,
+	CLIENT_ACCEPTED,
+	SUCCEEDED,
+	SERVER_FAILED,
+	CLIENT_FAILED
 }

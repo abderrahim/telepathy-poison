@@ -236,4 +236,18 @@ namespace Tox {
 		public delegate void FriendMessageCb(Instance tox, uint32 friend_number, int /*TOX_MESSAGE_TYPE*/ type, uint8[] message);
 		public void callback_friend_message(FriendMessageCb callback);
 	}
+
+	/* toxencryptsave bindings */
+
+	[CCode (cheader_filename="tox/toxencryptsave.h")]
+	public const int PASS_ENCRYPTION_EXTRA_LENGTH;
+
+	[CCode (cheader_filename="tox/toxencryptsave.h")]
+	public bool pass_encrypt(uint8[] data, uint8[] passphrase, [CCode (array_length=false)] uint8[] out, out int /*TOX_ERR_ENCRYPTION*/ error);
+
+	[CCode (cheader_filename="tox/toxencryptsave.h")]
+	public bool pass_decrypt(uint8[] data, uint8[] passphrase, [CCode (array_length=false)] uint8[] out, out int /*TOX_ERR_DECRYPTION*/ error);
+
+	[CCode (cheader_filename="tox/toxencryptsave.h")]
+	public bool is_data_encrypted([CCode (array_length=false)] uint8[] data);
 }

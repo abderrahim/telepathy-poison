@@ -13,6 +13,7 @@ telepathy_poison_SOURCES = \
 	src/protocol.vala	\
 	src/connection.vala	\
 	src/textchannel.vala	\
+	src/passwordchannel.vala	\
 	src/util.vala
 
 
