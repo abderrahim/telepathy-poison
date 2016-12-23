@@ -4,6 +4,8 @@ namespace Tox {
 	public const int PUBLIC_KEY_SIZE;
 	public const int SECRET_KEY_SIZE;
 	public const int MAX_STATUS_MESSAGE_LENGTH;
+	public const int HASH_LENGTH;
+	public const int FILE_ID_LENGTH;
 
 	[CCode (cname = "TOX_USER_STATUS")]
 	public enum UserStatus { NONE, AWAY, BUSY }
@@ -15,6 +17,12 @@ namespace Tox {
 
 	[CCode (cname = "TOX_CONNECTION")]
 	public enum Connection { NONE, TCP, UDP }
+
+	[CCode (cname = "TOX_FILE_KIND")]
+	public enum FileKind { DATA, AVATAR }
+
+	[CCode (cname = "TOX_FILE_CONTROL")]
+	public enum FileControl { RESUME, PAUSE, CANCEL }
 
 	[CCode (cname="struct Tox_Options", lower_case_cprefix = "tox_options_")]
 	[Compact]
@@ -235,6 +243,40 @@ namespace Tox {
 		[CCode (cname = "tox_friend_message_cb")]
 		public delegate void FriendMessageCb(Instance tox, uint32 friend_number, int /*TOX_MESSAGE_TYPE*/ type, uint8[] message);
 		public void callback_friend_message(FriendMessageCb callback);
+
+		/* file transmission */
+
+		public static bool hash ([CCode (array_length_cexpr="TOX_HASH_LENGTH")] uint8[] hash, uint8[] data);
+
+		public bool file_control (uint32 friend_number, uint32 file_number, FileControl control, out int /*TOX_ERR_FILE_CONTROL */ error);
+
+		public bool file_seek(uint32 friend_number, uint32 file_number, uint64 position, out int /*TOX_ERR_FILE_SEEK */error);
+
+		public bool file_get_file_id(uint32 friend_number, uint32 file_number, [CCode (array_length_cexpr="TOX_FILE_ID_LENGTH")] uint8[] file_id, out int /*TOX_ERR_FILE_GET */error);
+
+		[CCode (cname = "tox_file_recv_control_cb")]
+		public delegate void FileRecvControlCb(Tox.Instance tox, uint32 friend_number, uint32 file_number, FileControl control);
+		public void callback_file_recv_control (FileRecvControlCb callback);
+
+		/* file transmission: sending */
+
+		public uint32 file_send (uint32 friend_number, uint32 kind, uint64 file_size, [CCode (array_length_cexpr="TOX_FILE_ID_LENGTH")] uint8[] file_id, uint8[] filename, out int /*TOX_ERR_FILE_SEND */error);
+
+		public bool file_send_chunk (uint32 friend_number, uint32 file_number, uint64 position, uint8[]data, out int /*TOX_ERR_FILE_SEND_CHUNK */error);
+
+		[CCode (cname="tox_file_chunk_request_cb")]
+		public delegate void FileChunkRequestCb (uint32 friend_number, uint32 file_number, uint64 position, size_t length);
+		public void callback_file_chunk_request (FileChunkRequestCb callback);
+
+		/* File transmission: receiving */
+
+		[CCode (cname="tox_file_recv_cb")]
+		public delegate void FileRecvCb (uint32 friend_number, uint32 file_number, uint32 kind, uint64 file_size, uint8[] filename);
+		public void callback_file_recv (FileRecvCb callback);
+
+		[CCode (cname="tox_file_recv_chunk_cb")]
+		public delegate void FileRecvChunkCb (uint32 friend_number, uint32 file_number, uint64 position, uint8[] data);
+		public void callback_file_recv_chunk (FileRecvChunkCb callback);
 	}
 
 	/* toxencryptsave bindings */
